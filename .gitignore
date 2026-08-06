@@ -9,3 +9,4 @@ public/bundle.js.map
 
 # scala-cli build artifacts
 .scala-build/
+.bsp/
