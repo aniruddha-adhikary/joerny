@@ -40,7 +40,16 @@
     header .status.connected .dot { background: #5cb85c; }
     #left { grid-area: left; border-right: 1px solid var(--border); background: var(--panel);
       display: flex; flex-direction: column; overflow: hidden; }
-    #center { grid-area: center; overflow: hidden; position: relative; background: var(--bg); }
+    #center { grid-area: center; overflow: hidden; position: relative; background: var(--bg);
+      display: flex; flex-direction: column; }
+    #centerToolbar { display: none; align-items: center; gap: 6px; padding: 6px 10px;
+      border-bottom: 1px solid var(--border); background: var(--panel); }
+    #centerToolbar .tab { font-size: 11px; padding: 3px 10px; border-radius: 12px; cursor: pointer;
+      border: 1px solid var(--border); background: var(--panel-2); color: var(--muted); }
+    #centerToolbar .tab.active { color: var(--text); border-color: var(--accent); background: var(--accent-dim); }
+    #centerToolbar .tab[disabled] { opacity: .4; cursor: default; }
+    #centerToolbar .legend { margin-left: auto; color: var(--muted); font-size: 11px; }
+    #centerBody { flex: 1; position: relative; overflow: hidden; }
     #right { grid-area: right; border-left: 1px solid var(--border); background: var(--panel);
       overflow: auto; padding: 12px; }
     .section-title { text-transform: uppercase; letter-spacing: .6px; font-size: 10px;
@@ -57,7 +66,7 @@
     .kind-graph { background: var(--graph); }
     .kind-table { background: var(--table); }
     .kind-note  { background: var(--note); }
-    #cy { width: 100%; height: 100%; }
+    #cy, #projection { width: 100%; height: 100%; }
     #tableWrap, #noteWrap { width: 100%; height: 100%; overflow: auto; padding: 16px; }
     table.data { border-collapse: collapse; width: 100%; }
     table.data th, table.data td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
@@ -95,10 +104,18 @@
     <div id="layerList"></div>
   </aside>
   <main id="center">
-    <div class="empty" id="centerEmpty">Waiting for the agent to emit a layer…<br /><span class="hint">Point Joern scripts at JOERNY_DIR and call joerny.graph/table/note(...).emit()</span></div>
-    <div id="cy" style="display:none"></div>
-    <div id="tableWrap" style="display:none"></div>
-    <div id="noteWrap" style="display:none"></div>
+    <div id="centerToolbar">
+      <span class="tab" id="tabPrimary">Layer</span>
+      <span class="tab" id="tabProjection">Projection</span>
+      <span class="legend" id="projLegend" style="display:none">● parent&nbsp;&nbsp;<span style="color:var(--accent)">●</span> this layer</span>
+    </div>
+    <div id="centerBody">
+      <div class="empty" id="centerEmpty">Waiting for the agent to emit a layer…<br /><span class="hint">Point Joern scripts at JOERNY_DIR and call joerny.graph/table/note(...).emit()</span></div>
+      <div id="cy" style="display:none"></div>
+      <div id="projection" style="display:none"></div>
+      <div id="tableWrap" style="display:none"></div>
+      <div id="noteWrap" style="display:none"></div>
+    </div>
   </main>
   <aside id="right">
     <div class="empty hint" id="rightEmpty">Select a layer to inspect it.</div>

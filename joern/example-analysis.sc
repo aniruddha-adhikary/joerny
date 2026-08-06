@@ -43,17 +43,35 @@ import io.shiftleft.codepropertygraph.generated.nodes.Method
     )
     .emit()
 
-  // --- Layer 3: summary (note, derived from the graphs) -------------------
-  joerny.note("summary")
+  // --- Layer 3: components (graph, derived from fan-in-infra) -------------
+  // Group the shared infra methods into the components that own them. The
+  // node-level `mappings` (method -> component) are what the browser's
+  // Projection view draws, so "this component came from these common methods"
+  // is visible rather than just implied.
+  def componentOf(fullName: String): String =
+    fullName.split(":").head.split('.').dropRight(1).mkString(".")
+  val components = fanIn.map(m => componentOf(m.fullName)).distinct
+
+  joerny.graph("components")
     .from("fan-in-infra")
+    .narrate(s"${components.size} components, each derived from the common methods it owns (see the Projection view).")
+    .nodes(components.map(c => joerny.Node(c, c.split('.').last, "component")))
+    .edges(Nil)
+    .map(fanIn.map(m => joerny.Mapping(m.fullName, componentOf(m.fullName), "provided by")): _*)
+    .emit()
+
+  // --- Layer 4: summary (note, derived from the graphs) -------------------
+  joerny.note("summary")
+    .from("components")
     .markdown(
       s"""## Discovery summary
          |
          |- Entry points: **${entryPoints.size}**
          |- Shared infra methods: **${fanIn.size}**
+         |- Components: **${components.size}**
          |""".stripMargin
     )
     .emit()
 
-  println("[example] emitted entry-points, fan-in-infra, summary")
+  println("[example] emitted entry-points, fan-in-infra, components, summary")
 }

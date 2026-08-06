@@ -83,6 +83,13 @@ rendered by kind (Cytoscape graph / table / markdown); **right** = inspector
 (narration, metadata, node props, projections, and which other layers contain
 the selected node).
 
+When a layer declares `mappings` (or shares node ids with a parent graph), the
+center pane gains a **Projection** tab: a bipartite view drawing the parent
+nodes on the left and this layer's nodes on the right, connected by the mapping
+edges — so "this component came from these common methods" is actually drawn,
+not just listed. Dense graphs use a force-directed layout so hub/bipartite
+shapes spread out instead of collapsing into a column.
+
 ## Try it without Joern
 
 ```bash
