@@ -1,0 +1,8 @@
+node_modules/
+dist/
+dist-test/
+public/bundle.js
+public/bundle.js.map
+
+# joerny session layer store
+.joerny/
