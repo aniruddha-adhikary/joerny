@@ -48,7 +48,15 @@
       border: 1px solid var(--border); background: var(--panel-2); color: var(--muted); }
     #centerToolbar .tab.active { color: var(--text); border-color: var(--accent); background: var(--accent-dim); }
     #centerToolbar .tab[disabled] { opacity: .4; cursor: default; }
-    #centerToolbar .legend { margin-left: auto; color: var(--muted); font-size: 11px; }
+    #legend { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center;
+      gap: 10px; color: var(--muted); font-size: 11px; justify-content: flex-end; max-width: 62%; }
+    .lg-item { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+    .lg-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+    .lg-line { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+    .lg-badge { font-size: 9px; text-transform: uppercase; letter-spacing: .5px; padding: 1px 5px;
+      border-radius: 8px; color: var(--bg); font-weight: 700; }
+    .lg-hint { font-style: italic; opacity: .8; }
+    #kindLegend { display: flex; gap: 10px; padding: 0 12px 8px; color: var(--muted); font-size: 10px; }
     #centerBody { flex: 1; position: relative; overflow: hidden; }
     #right { grid-area: right; border-left: 1px solid var(--border); background: var(--panel);
       overflow: auto; padding: 12px; }
@@ -87,6 +95,24 @@
       border: 1px solid var(--border); cursor: pointer; }
     .chip:hover { border-color: var(--accent); }
     .hint { color: var(--muted); font-size: 12px; }
+    /* Requirement / evidence inspector */
+    pre.code { background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px;
+      padding: 8px 10px; margin: 0 0 12px; overflow: auto; max-height: 320px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
+      line-height: 1.45; white-space: pre; color: #d6dbe6; }
+    pre.code.src { max-height: 420px; }
+    .req-text { margin: 0 0 12px; padding: 8px 12px; border-left: 3px solid var(--accent);
+      background: var(--panel-2); border-radius: 0 6px 6px 0; font-size: 13px; }
+    .status-line { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+    .status-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+      padding: 2px 8px; border-radius: 10px; color: #0f1115; }
+    .status-badge.st-supported { background: #7ed6a5; }
+    .status-badge.st-unverified { background: #e0b978; }
+    .status-badge.st-unsupported { background: #f0616d; color: #fff; }
+    .gate { color: var(--muted); font-size: 11px; }
+    .callout { background: rgba(240,97,109,.12); border: 1px solid #f0616d; color: #f4a6ad;
+      border-radius: 6px; padding: 6px 10px; margin-bottom: 10px; font-size: 12px; }
+    .loc { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); font-weight: 400; }
     a { color: var(--accent); }
   </style>
 </head>
@@ -100,6 +126,7 @@
   <aside id="left">
     <div class="section-title">Lineage</div>
     <div id="lineage"></div>
+    <div id="kindLegend"></div>
     <div class="section-title">Layers</div>
     <div id="layerList"></div>
   </aside>
@@ -107,7 +134,7 @@
     <div id="centerToolbar">
       <span class="tab" id="tabPrimary">Layer</span>
       <span class="tab" id="tabProjection">Projection</span>
-      <span class="legend" id="projLegend" style="display:none">● parent&nbsp;&nbsp;<span style="color:var(--accent)">●</span> this layer</span>
+      <span id="legend"></span>
     </div>
     <div id="centerBody">
       <div class="empty" id="centerEmpty">Waiting for the agent to emit a layer…<br /><span class="hint">Point Joern scripts at JOERNY_DIR and call joerny.graph/table/note(...).emit()</span></div>

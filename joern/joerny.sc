@@ -32,7 +32,17 @@ object joerny {
 
   final case class Node(id: String, label: String = null, `type`: String = null, props: Map[String, Any] = Map.empty)
   final case class Edge(src: String, dst: String, `type`: String = null, props: Map[String, Any] = Map.empty)
-  final case class Mapping(from: String, to: String, note: String = null)
+  final case class Mapping(from: String, to: String, evidence: String = null)
+
+  /** The computed result of a projection primitive: target nodes, optional edges,
+   *  the provenance-carrying mappings (source node -> target node, `evidence` = why),
+   *  and a few stats. Feed straight into a graph layer with `.project(result)`. */
+  final case class Projection(
+    nodes: List[Node] = Nil,
+    edges: List[Edge] = Nil,
+    mappings: List[Mapping] = Nil,
+    stats: Map[String, Any] = Map.empty
+  )
 
   // ---- output location -----------------------------------------------------
 
@@ -111,7 +121,7 @@ object joerny {
     val fields = List(
       Some(field("from", jsonVal(m.from))),
       Some(field("to", jsonVal(m.to))),
-      optStr("note", m.note)
+      optStr("evidence", m.evidence)
     ).flatten
     fields.mkString("{", ",", "}")
   }
@@ -171,6 +181,13 @@ object joerny {
     def node(n: Node): GraphBuilder = { _nodes = _nodes :+ n; this }
     def edges(es: Iterable[Edge]): GraphBuilder = { _edges = _edges ++ es.toList; this }
     def edge(e: Edge): GraphBuilder = { _edges = _edges :+ e; this }
+    /** Merge a computed projection (its nodes, edges and provenance mappings) into this layer. */
+    def project(p: Projection): GraphBuilder = {
+      _nodes = _nodes ++ p.nodes
+      _edges = _edges ++ p.edges
+      _mappings = _mappings ++ p.mappings
+      this
+    }
     protected def payloadFields(): List[String] = List(
       field("nodes", "[" + _nodes.map(nodeJson).mkString(",") + "]"),
       field("edges", "[" + _edges.map(edgeJson).mkString(",") + "]")
@@ -198,4 +215,176 @@ object joerny {
   def graph(name: String): GraphBuilder = new GraphBuilder(name)
   def table(name: String): TableBuilder = new TableBuilder(name)
   def note(name: String): NoteBuilder = new NoteBuilder(name)
+
+  // ---- projection primitives -----------------------------------------------
+  //
+  // A projection is a function from source nodes to target nodes plus the
+  // mappings that record *why* each source landed where it did (the `evidence`).
+  // These helpers compute the mappings-with-provenance for you so a script can
+  // declare intent ("group these by call-shape") instead of hand-typing edges.
+  // They are generic and dependency-free — you pass plain ids and functions, so
+  // they work on any Joern classpath and on non-CPG data alike.
+  //
+  //   val p = joerny.derive.classify(types, _.name, Seq(
+  //     joerny.derive.whenContains[TypeDecl]("dao",  _.name, "DAO"),
+  //     joerny.derive.whenContains[TypeDecl]("rule", _.name, "Rule")))
+  //   joerny.graph("roles").from("types").project(p).emit()
+
+  object derive {
+
+    /** Union-find connected components over an undirected edge set. */
+    private def connectedComponents(
+        seed: scala.collection.Set[String],
+        edges: Iterable[(String, String)]): List[Set[String]] = {
+      val parent = scala.collection.mutable.Map.empty[String, String]
+      def root(x: String): String = {
+        var r = x
+        while (parent.getOrElse(r, r) != r) r = parent(r)
+        var cur = x
+        while (parent.getOrElse(cur, cur) != r) { val nxt = parent(cur); parent(cur) = r; cur = nxt }
+        r
+      }
+      def union(a: String, b: String): Unit = { val ra = root(a); val rb = root(b); if (ra != rb) parent(ra) = rb }
+      seed.foreach(n => if (!parent.contains(n)) parent(n) = n)
+      edges.foreach { case (a, b) =>
+        if (!parent.contains(a)) parent(a) = a
+        if (!parent.contains(b)) parent(b) = b
+        union(a, b)
+      }
+      parent.keys.toList.groupBy(root).values.map(_.toSet).toList
+    }
+
+    /** Convenience: a classification rule that fires when `text(item)` contains any token. */
+    def whenContains[A](category: String, text: A => String, tokens: String*): (String, A => Option[String]) =
+      category -> ((a: A) => tokens.find(t => text(a).contains(t)).map(t => s"contains '$t'"))
+
+    /** #1 Classification: tag each item with the first matching rule's category.
+     *  Rules are `(categoryId, predicate)` where the predicate returns `Some(evidence)`
+     *  on a match; that string becomes the mapping's evidence. Unmatched items
+     *  are counted in stats but not mapped. */
+    def classify[A](items: Iterable[A], id: A => String, rules: Seq[(String, A => Option[String])]): Projection = {
+      val ms = scala.collection.mutable.ListBuffer.empty[Mapping]
+      val counts = scala.collection.mutable.LinkedHashMap.empty[String, Int]
+      var unclassified = 0
+      items.foreach { a =>
+        val hit = rules.iterator.map { case (cat, f) => f(a).map(ev => (cat, ev)) }.collectFirst { case Some(x) => x }
+        hit match {
+          case Some((cat, ev)) => counts(cat) = counts.getOrElse(cat, 0) + 1; ms += Mapping(id(a), cat, ev)
+          case None            => unclassified += 1
+        }
+      }
+      Projection(
+        nodes = counts.toList.map { case (c, n) => Node(c, c, "category", Map("members" -> n)) },
+        mappings = ms.toList,
+        stats = Map("classified" -> ms.size, "categories" -> counts.size, "unclassified" -> unclassified)
+      )
+    }
+
+    /** #2 Equivalence grouping ("fingerprint"): items sharing an identical `key` string
+     *  form one group. Each group is a target node; every member maps to it with the
+     *  shared key as provenance. This is the "these are the same component" primitive. */
+    def groupByKey[A](items: Iterable[A], id: A => String, key: A => String,
+                      groupId: String => String, groupLabel: String => String): Projection = {
+      val groups = items.groupBy(key).toList
+      val ms = scala.collection.mutable.ListBuffer.empty[Mapping]
+      val nodes = groups.map { case (k, members) =>
+        val gid = groupId(k)
+        members.foreach(m => ms += Mapping(id(m), gid, s"shared key: ${if (k.length > 80) k.take(80) + "…" else k}"))
+        Node(gid, groupLabel(k), "group", Map("size" -> members.size))
+      }
+      Projection(nodes = nodes, mappings = ms.toList,
+        stats = Map("groups" -> groups.size, "items" -> items.size,
+                    "nonTrivialGroups" -> groups.count(_._2.size > 1)))
+    }
+
+    /** #2 with auto-generated group ids/labels (`group-0`, `group-1`, …). */
+    def groupByKey[A](items: Iterable[A], id: A => String, key: A => String): Projection = {
+      val index = items.map(key).toList.distinct.zipWithIndex.toMap
+      groupByKey(items, id, key, k => s"group-${index(k)}", k => s"group-${index(k)}")
+    }
+
+    final case class BipartiteResult(incidence: Projection, coupling: Projection, clusters: Projection)
+
+    /** #3 with no backboning (every shared right counts). */
+    def bipartite(pairs: Iterable[(String, String)], minShared: Int): BipartiteResult =
+      bipartite(pairs, minShared, maxHubShare = 1.0)
+
+    /** #3 Bipartite projection: from a two-mode `(left, right)` incidence relation, derive
+     *  left↔left coupling (two lefts linked when they share >= `minShared` rights, shared
+     *  rights recorded as provenance) and the connected-component clusters over it. Returns
+     *  the raw incidence, the coupling graph, and the clusters — pick whichever to emit.
+     *
+     *  Backboning: a right-node touched by more than `maxHubShare` of the lefts (a ubiquitous
+     *  table like AUDIT_LOG) couples almost everything and collapses the graph into one blob,
+     *  so such hubs are dropped from the coupling computation (still present in `incidence`).
+     *  Pass `maxHubShare = 1.0` to keep every right. Combined with `minShared >= 2` this is
+     *  what separates dense projections into meaningful clusters. */
+    def bipartite(pairs: Iterable[(String, String)], minShared: Int, maxHubShare: Double): BipartiteResult = {
+      val byLeft: Map[String, Set[String]] = pairs.groupBy(_._1).map { case (l, ps) => l -> ps.map(_._2).toSet }
+      val lefts = byLeft.keys.toVector.sorted
+      // right-node frequency → hubs are those above the share threshold.
+      val rightFreq: Map[String, Int] = pairs.groupBy(_._2).map { case (r, ps) => r -> ps.map(_._1).toSet.size }
+      val hubs: Set[String] = rightFreq.collect { case (r, f) if f.toDouble / lefts.size > maxHubShare => r }.toSet
+      val effLeft: Map[String, Set[String]] = byLeft.map { case (l, rs) => l -> (rs -- hubs) }
+      val couplingEdges = scala.collection.mutable.ListBuffer.empty[Edge]
+      var i = 0
+      while (i < lefts.size) {
+        var j = i + 1
+        while (j < lefts.size) {
+          val a = lefts(i); val b = lefts(j)
+          val shared = effLeft(a).intersect(effLeft(b))
+          if (shared.size >= minShared)
+            couplingEdges += Edge(a, b, "shares", Map("count" -> shared.size, "via" -> shared.toList.sorted.mkString(", ")))
+          j += 1
+        }
+        i += 1
+      }
+      // connectedComponents seeds from all lefts, so lefts with no surviving
+      // coupling edge each form their own singleton cluster.
+      val comps = connectedComponents(lefts.toSet, couplingEdges.map(e => (e.src, e.dst)))
+      val cms = scala.collection.mutable.ListBuffer.empty[Mapping]
+      val clusterNodes = comps.zipWithIndex.map { case (members, k) =>
+        val cid = s"cluster-$k"
+        members.foreach(m => cms += Mapping(m, cid, s"coupled cluster of ${members.size}"))
+        Node(cid, s"cluster-$k (${members.size})", "cluster", Map("size" -> members.size))
+      }
+      BipartiteResult(
+        incidence = Projection(mappings = pairs.map { case (l, r) => Mapping(l, r, "accesses") }.toList,
+          stats = Map("pairs" -> pairs.size, "lefts" -> byLeft.size)),
+        coupling = Projection(
+          nodes = lefts.toList.map(l => Node(l, l.split('.').last, "node")),
+          edges = couplingEdges.toList,
+          stats = Map("edges" -> couplingEdges.size, "minShared" -> minShared, "hubsDropped" -> hubs.size)),
+        clusters = Projection(nodes = clusterNodes, mappings = cms.toList,
+          stats = Map("clusters" -> comps.size, "hubsDropped" -> hubs.toList.sorted.mkString(",")))
+      )
+    }
+
+    /** #5 Forward slice: BFS from each seed id over a directed edge relation up to `maxDepth`.
+     *  Every reached node maps back to its seed with the discovery depth as provenance —
+     *  the "what implements / is affected by X" primitive. */
+    def slice(seeds: Iterable[String], edges: Iterable[(String, String)], maxDepth: Int): Projection = {
+      val adj: Map[String, List[String]] = edges.groupBy(_._1).map { case (s, ps) => s -> ps.map(_._2).toList }
+      val ms = scala.collection.mutable.ListBuffer.empty[Mapping]
+      val reached = scala.collection.mutable.LinkedHashSet.empty[String]
+      seeds.foreach { seed =>
+        val seen = scala.collection.mutable.Map[String, Int](seed -> 0)
+        val q = scala.collection.mutable.Queue.empty[(String, Int)]
+        q.enqueue((seed, 0))
+        while (q.nonEmpty) {
+          val (n, d) = q.dequeue()
+          reached += n
+          if (n != seed) ms += Mapping(seed, n, s"reachable at depth $d")
+          if (d < maxDepth) adj.getOrElse(n, Nil).foreach { m =>
+            if (!seen.contains(m)) { seen(m) = d + 1; q.enqueue((m, d + 1)) }
+          }
+        }
+      }
+      Projection(
+        nodes = reached.toList.map(n => Node(n, n.split('.').last.takeWhile(_ != ':'), "sliced")),
+        mappings = ms.toList,
+        stats = Map("seeds" -> seeds.size, "reached" -> reached.size)
+      )
+    }
+  }
 }

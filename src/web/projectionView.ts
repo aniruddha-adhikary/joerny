@@ -2,6 +2,7 @@ import cytoscape, { type Core, type EventObject } from "cytoscape";
 import dagre from "cytoscape-dagre";
 import type { Layer } from "../shared/layer.js";
 import type { AppState } from "./state.js";
+import { measure, present } from "./viewHeuristics.js";
 
 cytoscape.use(dagre);
 
@@ -43,10 +44,13 @@ function build(state: AppState, layer: Layer): Built {
     elements.push({ data: { id: cyId, realId: id, label, role: "source", type: type ?? "" } });
   };
 
-  // Target-side nodes = this layer's own nodes (or, for non-graph layers, the
-  // distinct mapping targets).
+  // Target-side nodes = this layer's *derived* nodes. A node that is itself a
+  // mapping source (e.g. the class nodes in a class→cluster projection) is a
+  // source, not a target — including it too would litter the view with orphan
+  // target nodes that carry no edges and distort the layout.
+  const sourceIds = new Set((layer.mappings ?? []).map((m) => m.from));
   if (layer.kind === "graph") {
-    for (const n of layer.nodes) addTarget(n.id, n.label, n.type);
+    for (const n of layer.nodes) if (!sourceIds.has(n.id)) addTarget(n.id, n.label, n.type);
   }
 
   let edgeCount = 0;
@@ -56,7 +60,7 @@ function build(state: AppState, layer: Layer): Built {
       addSource(m.from, src?.label ?? m.from.split(/[.#]/).pop() ?? m.from, src?.type);
       addTarget(m.to, m.to.split(/[.#]/).pop() ?? m.to);
       elements.push({
-        data: { id: `m${edgeCount++}`, source: `src::${m.from}`, target: `dst::${m.to}`, label: m.note ?? "" },
+        data: { id: `m${edgeCount++}`, source: `src::${m.from}`, target: `dst::${m.to}`, label: m.evidence ?? "" },
       });
     }
   } else if (layer.kind === "graph") {
@@ -86,6 +90,19 @@ export function renderProjection(
 ): ProjectionHandle {
   const { elements, empty } = build(state, layer);
 
+  // Mapping-note labels are the whole point here, but drawing them on every
+  // edge at once (e.g. 25 "coupled cluster of 25" edges into one node) is
+  // unreadable — so presentation follows the projection's measured shape, and
+  // when it's crowded the notes are hidden at rest and revealed for a node's
+  // incident edges on hover/selection. It's always a left→right bipartite
+  // hierarchy (preferDagreLR), so only labelling/spacing adapts.
+  const projEdges = elements
+    .filter((e) => (e.data as { source?: string }).source)
+    .map((e) => e.data as { source: string; target: string });
+  const nodeCount = elements.length - projEdges.length;
+  const p = present(measure(nodeCount, projEdges), { preferDagreLR: true });
+  const hideEdgeLabels = p.edgeLabels === "hover";
+
   const cy = cytoscape({
     container,
     elements,
@@ -95,12 +112,14 @@ export function renderProjection(
         style: {
           label: "data(label)",
           color: "#e6e9ef",
-          "font-size": 10,
+          "font-size": p.fontSize,
           "text-valign": "center",
           "text-halign": "right",
-          "text-margin-x": 5,
-          "text-max-width": "200px",
+          "text-margin-x": 6,
+          "text-max-width": "180px",
           "text-wrap": "ellipsis",
+          "text-outline-color": "#0f1115",
+          "text-outline-width": 2,
           width: 16,
           height: 16,
         },
@@ -110,27 +129,58 @@ export function renderProjection(
       {
         selector: "edge",
         style: {
-          width: 1.4,
-          label: "data(label)",
-          "font-size": 8,
-          color: "#8b93a7",
-          "line-color": "#4a5268",
-          "target-arrow-color": "#4a5268",
+          width: 1.2,
+          label: hideEdgeLabels ? "" : "data(label)",
+          "font-size": Math.max(p.fontSize - 2, 8),
+          color: "#c7cdda",
+          "text-outline-color": "#0f1115",
+          "text-outline-width": 2,
+          "line-color": "#3a4252",
+          "target-arrow-color": "#3a4252",
           "target-arrow-shape": "triangle",
           "curve-style": "bezier",
           "arrow-scale": 0.8,
           "text-rotation": "autorotate",
+          opacity: p.edgeOpacity,
         },
+      },
+      { selector: ".faded", style: { opacity: 0.06 } },
+      {
+        selector: "edge.lit",
+        style: { "line-color": "#6ea8fe", "target-arrow-color": "#6ea8fe", opacity: 1, width: 2, label: "data(label)", "z-index": 21 },
       },
       { selector: ".highlight", style: { "border-width": 2, "border-color": "#fff" } },
     ],
-    layout: { name: "dagre", rankDir: "LR", nodeSep: 14, rankSep: 220 } as cytoscape.LayoutOptions,
+    layout: p.layout,
     wheelSensitivity: 0.2,
   });
 
-  cy.on("tap", "node", (evt: EventObject) => onSelect(evt.target.data("realId") as string));
+  const clearFocus = (): void => {
+    cy.elements().removeClass("faded lit");
+  };
+  const focus = (node: cytoscape.NodeSingular): void => {
+    const hood = node.closedNeighborhood();
+    cy.elements().addClass("faded");
+    hood.removeClass("faded");
+    node.connectedEdges().removeClass("faded").addClass("lit");
+  };
+  cy.on("mouseover", "node", (evt: EventObject) => {
+    if (cy.nodes(":selected").empty()) focus(evt.target as cytoscape.NodeSingular);
+  });
+  cy.on("mouseout", "node", () => {
+    if (cy.nodes(":selected").empty()) clearFocus();
+  });
+
+  cy.on("tap", "node", (evt: EventObject) => {
+    clearFocus();
+    focus(evt.target as cytoscape.NodeSingular);
+    onSelect(evt.target.data("realId") as string);
+  });
   cy.on("tap", (evt: EventObject) => {
-    if (evt.target === cy) onSelect(null);
+    if (evt.target === cy) {
+      clearFocus();
+      onSelect(null);
+    }
   });
 
   return { cy, destroy: () => cy.destroy(), empty };

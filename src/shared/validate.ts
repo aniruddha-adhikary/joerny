@@ -52,7 +52,7 @@ export function validateLayer(raw: unknown): ValidationResult {
       mappings = [];
       for (const m of raw.mappings) {
         if (isObject(m) && typeof m.from === "string" && typeof m.to === "string") {
-          mappings.push({ from: m.from, to: m.to, note: m.note === undefined ? undefined : String(m.note) });
+          mappings.push({ from: m.from, to: m.to, evidence: m.evidence === undefined ? undefined : String(m.evidence) });
         } else {
           errors.push("each mapping needs string `from` and `to`");
         }

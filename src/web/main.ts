@@ -5,6 +5,7 @@ import { renderGraph, type GraphViewHandle } from "./graphView.js";
 import { renderProjection, type ProjectionHandle } from "./projectionView.js";
 import { renderLineage } from "./lineage.js";
 import { renderInspector } from "./inspector.js";
+import { legendHtml, kindLegendHtml } from "./legend.js";
 
 const state = new AppState();
 let selectedNodeId: string | null = null;
@@ -27,8 +28,11 @@ const el = {
   tabPrimary: document.getElementById("tabPrimary") as HTMLElement,
   tabProjection: document.getElementById("tabProjection") as HTMLElement,
   projection: document.getElementById("projection") as HTMLElement,
-  projLegend: document.getElementById("projLegend") as HTMLElement,
+  legend: document.getElementById("legend") as HTMLElement,
+  kindLegend: document.getElementById("kindLegend") as HTMLElement,
 };
+
+el.kindLegend.innerHTML = kindLegendHtml();
 
 el.tabPrimary.addEventListener("click", () => setViewMode("primary"));
 el.tabProjection.addEventListener("click", () => {
@@ -97,7 +101,7 @@ function renderCenter(): void {
   el.tabPrimary.textContent = layer.kind === "graph" ? "Graph" : layer.kind === "table" ? "Table" : "Note";
   el.tabPrimary.classList.toggle("active", state.viewMode === "primary");
   el.tabProjection.classList.toggle("active", state.viewMode === "projection");
-  el.projLegend.style.display = state.viewMode === "projection" ? "inline" : "none";
+  el.legend.innerHTML = legendHtml(layer, state.viewMode);
   if (hasProj) el.tabProjection.removeAttribute("disabled");
   else el.tabProjection.setAttribute("disabled", "");
 
@@ -151,7 +155,17 @@ function renderRight(): void {
 
 function renderAll(): void {
   renderLayerList();
-  renderLineage(el.lineage, state.ordered(), state.selectedLayerId, (id) => selectLayer(id));
+  renderLineage(
+    el.lineage,
+    state.ordered(),
+    state.selectedLayerId,
+    (id) => selectLayer(id),
+    (childId) => {
+      selectLayer(childId);
+      state.viewMode = "projection";
+      renderCenter();
+    },
+  );
   renderCenter();
   renderRight();
 }

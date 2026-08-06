@@ -41,22 +41,13 @@ export function renderInspector(
   meta.push(`<span class="k">created</span><span class="v">${escapeHtml(layer.createdAt)}</span>`);
   parts.push(`<div class="kv">${meta.join("")}</div>`);
 
-  if (layer.mappings && layer.mappings.length) {
-    parts.push(`<h3>Projections (${layer.mappings.length})</h3>`);
-    const rows = layer.mappings
-      .slice(0, 50)
-      .map(
-        (m) =>
-          `<div class="hint"><code>${escapeHtml(m.from)}</code> → <code>${escapeHtml(m.to)}</code>${
-            m.note ? ` — ${escapeHtml(m.note)}` : ""
-          }</div>`,
-      )
-      .join("");
-    parts.push(rows);
-  }
+  const selectedNode =
+    selectedNodeId && layer.kind === "graph" ? layer.nodes.find((n) => n.id === selectedNodeId) : undefined;
 
-  if (selectedNodeId && layer.kind === "graph") {
-    const node = layer.nodes.find((n) => n.id === selectedNodeId);
+  // Node detail comes *before* the layer-wide mappings list so a selected node's
+  // evidence/source is never buried under a long projection table.
+  {
+    const node = selectedNode;
     if (node) {
       parts.push(`<h3>Node</h3>`);
       const nodeMeta: string[] = [
@@ -64,10 +55,29 @@ export function renderInspector(
         `<span class="k">label</span><span class="v">${escapeHtml(node.label)}</span>`,
       ];
       if (node.type) nodeMeta.push(`<span class="k">type</span><span class="v">${escapeHtml(node.type)}</span>`);
+      // Keys rendered as their own blocks (code / badges), not inline k/v rows.
+      const blockKeys = new Set(["source", "detail", "requirement", "status", "gate", "note"]);
       for (const [k, v] of Object.entries(node.props ?? {})) {
+        if (blockKeys.has(k)) continue;
         nodeMeta.push(`<span class="k">${escapeHtml(k)}</span><span class="v">${escapeHtml(String(v))}</span>`);
       }
       parts.push(`<div class="kv">${nodeMeta.join("")}</div>`);
+
+      const props = (node.props ?? {}) as Record<string, unknown>;
+      const status = props.status ? String(props.status) : "";
+      if (status) {
+        const cls = `st-${status.toLowerCase()}`;
+        parts.push(`<div class="status-line"><span class="status-badge ${cls}">${escapeHtml(status)}</span>${
+          props.gate ? `<span class="gate">${escapeHtml(String(props.gate))}</span>` : ""
+        }</div>`);
+      }
+      if (props.note) parts.push(`<div class="callout">${escapeHtml(String(props.note))}</div>`);
+      if (props.requirement) parts.push(`<blockquote class="req-text">${escapeHtml(String(props.requirement))}</blockquote>`);
+      if (props.detail) parts.push(`<h3>Evidence</h3><pre class="code">${escapeHtml(String(props.detail))}</pre>`);
+      if (props.source) {
+        const loc = props.loc ? `<span class="loc">${escapeHtml(String(props.loc))}</span>` : "";
+        parts.push(`<h3>Source ${loc}</h3><pre class="code src">${escapeHtml(String(props.source))}</pre>`);
+      }
 
       const others = state.layersContainingNode(node.id).filter((l) => l.id !== layer.id);
       if (others.length) {
@@ -77,6 +87,27 @@ export function renderInspector(
         parts.push(`<h3>Also appears in</h3><div class="chips">${chips}</div>`);
       }
     }
+  }
+
+  const allMappings = layer.mappings ?? [];
+  // With a node selected, show only the mappings that touch it (its lineage in
+  // and out); otherwise the whole layer's mapping table.
+  const shown = selectedNode
+    ? allMappings.filter((m) => m.from === selectedNode.id || m.to === selectedNode.id)
+    : allMappings;
+  if (shown.length) {
+    const title = selectedNode ? `Mappings for ${escapeHtml(selectedNode.label)} (${shown.length})` : `Mappings (${allMappings.length})`;
+    parts.push(`<h3>${title}</h3>`);
+    const rows = shown
+      .slice(0, 50)
+      .map(
+        (m) =>
+          `<div class="hint"><code>${escapeHtml(m.from)}</code> → <code>${escapeHtml(m.to)}</code>${
+            m.evidence ? ` — ${escapeHtml(m.evidence)}` : ""
+          }</div>`,
+      )
+      .join("");
+    parts.push(rows);
   }
 
   el.innerHTML = parts.join("");

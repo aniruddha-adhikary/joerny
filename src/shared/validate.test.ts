@@ -45,11 +45,11 @@ test("validates note layers and preserves lineage + mappings", () => {
     kind: "note",
     markdown: "# hi",
     derivedFrom: ["t"],
-    mappings: [{ from: "a", to: "b", note: "projected" }],
+    mappings: [{ from: "a", to: "b", evidence: "projected" }],
   });
   assert.ok(res.ok, res.errors.join("; "));
   assert.deepEqual(res.layer?.derivedFrom, ["t"]);
-  assert.equal(res.layer?.mappings?.[0].note, "projected");
+  assert.equal(res.layer?.mappings?.[0].evidence, "projected");
 });
 
 test("rejects non-object input", () => {

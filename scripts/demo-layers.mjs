@@ -84,7 +84,7 @@ const layers = [
     ],
     edges: [],
     mappings: [
-      { from: "job.Job1", to: "cmp.sftp-ingest", note: "config only" },
+      { from: "job.Job1", to: "cmp.sftp-ingest", evidence: "config only" },
       { from: "job.Job2", to: "cmp.sftp-ingest" },
       { from: "job.Job5", to: "cmp.sftp-ingest" },
       { from: "job.Job6", to: "cmp.mq-dispatch" },
