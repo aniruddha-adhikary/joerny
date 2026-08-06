@@ -6,3 +6,6 @@ public/bundle.js.map
 
 # joerny session layer store
 .joerny/
+
+# scala-cli build artifacts
+.scala-build/
