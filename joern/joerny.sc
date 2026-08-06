@@ -56,6 +56,33 @@ object joerny {
     stats: Map[String, Any] = Map.empty
   )
 
+  // ---- script trace: step spans --------------------------------------------
+  //
+  // Wrap a phase of your script so the emit timeline reads as a trace: every
+  // layer emitted inside the block is tagged with this step's name, and the
+  // wall-clock duration is logged. This is the honest unit of a script trace —
+  // a phase boundary you declare, not per-line instrumentation (Joern runs a
+  // .sc as a compiled block). Steps may be nested; the innermost name wins.
+  //
+  //   joerny.step("classify jobs") {
+  //     joerny.graph("roles").project(...).emit()
+  //   }
+  //
+  private var _currentStep: String = null
+  private[this] def currentStep: String = _currentStep
+
+  def step[T](label: String)(body: => T): T = {
+    val prev = _currentStep
+    _currentStep = label
+    val t0 = System.currentTimeMillis()
+    try body
+    finally {
+      val ms = System.currentTimeMillis() - t0
+      println(s"[joerny] step '$label' — ${ms}ms")
+      _currentStep = prev
+    }
+  }
+
   // ---- output location -----------------------------------------------------
 
   private def outDir(): File = {
@@ -183,6 +210,7 @@ object joerny {
         Some(field("kind", jsonVal(kind))),
         Some(field("derivedFrom", "[" + _from.map(jsonVal).mkString(",") + "]")),
         optStr("narration", _narration),
+        optStr("step", currentStep),
         Some(field("createdAt", jsonVal(Instant.now().toString))),
         if (_mappings.nonEmpty) Some(field("mappings", "[" + _mappings.map(mappingJson).mkString(",") + "]")) else None
       ).flatten

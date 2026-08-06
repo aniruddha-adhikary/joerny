@@ -27,6 +27,7 @@ const layers = [
     kind: "graph",
     derivedFrom: [],
     narration: "12 validated batch-job main() methods (survived ground-truth check against cron/AutoSys).",
+    step: "discover entry points",
     createdAt: now(),
     nodes: Array.from({ length: 12 }, (_, i) => ({
       id: `job.Job${i + 1}`,
@@ -41,6 +42,7 @@ const layers = [
     kind: "graph",
     derivedFrom: ["entry-points"],
     narration: "Methods called by 5+ distinct job classes — the SDK layer (email, SFTP, MQ, DB).",
+    step: "find shared infra",
     createdAt: now(),
     nodes: [
       { id: "sdk.SftpClient.upload", label: "SftpClient.upload", type: "infra" },
@@ -62,6 +64,7 @@ const layers = [
     kind: "table",
     derivedFrom: ["entry-points"],
     narration: "Jobs grouped by identical depth-3 call-tree fingerprint. Each cluster = one component.",
+    step: "cluster jobs",
     createdAt: now(),
     columns: ["cluster", "jobs", "shared call-tree"],
     rows: [
@@ -76,6 +79,7 @@ const layers = [
     kind: "graph",
     derivedFrom: ["fan-in-infra", "job-clusters"],
     narration: "3 components replace 12 legacy jobs (4:1). Mappings show which jobs project into each component.",
+    step: "propose components",
     createdAt: now(),
     nodes: [
       { id: "cmp.sftp-ingest", label: "sftp-ingest", type: "component" },
@@ -99,6 +103,7 @@ const layers = [
     derivedFrom: ["fan-in-infra", "components"],
     narration:
       "Requirements compiled from facts; each cites the fact it came from (click a fact in the inspector to trace back). Solid cites = mechanical; dashed = LLM-inferred.",
+    step: "reconstruct requirements",
     createdAt: now(),
     nodes: [
       { id: "REQ-1", label: "REQ-1", type: "requirement", props: { requirement: "The system SHALL upload files via SFTP.", status: "SUPPORTED", gate: "all citations resolve", cites: "cap:SFTP" } },
@@ -120,6 +125,7 @@ const layers = [
     kind: "note",
     derivedFrom: ["components"],
     narration: "Human-readable wrap-up of the discovery run.",
+    step: "summarize",
     createdAt: now(),
     markdown: [
       "## Component Discovery — Summary",
@@ -140,7 +146,12 @@ const layers = [
 ];
 
 async function main() {
-  for (const layer of layers) {
+  const t0 = Date.now();
+  for (let i = 0; i < layers.length; i += 1) {
+    const layer = layers[i];
+    // Sequential createdAt so the trace scrubber orders layers by emit order
+    // even when all files are written in the same millisecond.
+    layer.createdAt = new Date(t0 + i * 1000).toISOString();
     const file = join(dir, `${layer.id}.json`);
     writeFileSync(file, JSON.stringify(layer, null, 2));
     console.log(`wrote ${file}`);

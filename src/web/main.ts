@@ -6,6 +6,7 @@ import { renderProjection, type ProjectionHandle } from "./projectionView.js";
 import { renderLineage } from "./lineage.js";
 import { renderInspector } from "./inspector.js";
 import { legendHtml, kindLegendHtml } from "./legend.js";
+import { renderTimeline, stopPlayback } from "./timeline.js";
 
 const state = new AppState();
 let graphHandle: GraphViewHandle | null = null;
@@ -33,6 +34,7 @@ const el = {
   navBack: document.getElementById("navBack") as HTMLButtonElement,
   navForward: document.getElementById("navForward") as HTMLButtonElement,
   breadcrumb: document.getElementById("breadcrumb") as HTMLElement,
+  timeline: document.getElementById("timeline") as HTMLElement,
 };
 
 el.kindLegend.innerHTML = kindLegendHtml();
@@ -85,16 +87,21 @@ function go(layerId: string, opts: { nodeId?: string | null; viewMode?: "primary
 
 function renderLayerList(): void {
   const layers = state.ordered();
+  const cursor = state.cursorIndex();
   el.layerList.innerHTML = "";
-  for (const layer of layers) {
+  layers.forEach((layer, i) => {
     const item = document.createElement("div");
-    item.className = "layer-item" + (layer.id === state.selectedLayerId ? " selected" : "");
+    // Layers emitted after the scrubber position are "future" — dimmed, so the
+    // reveal reads as the script unfolding in emit order.
+    const future = i > cursor ? " future" : "";
+    item.className =
+      "layer-item" + (layer.id === state.selectedLayerId ? " selected" : "") + future;
     item.innerHTML = `<span class="kind-badge kind-${layer.kind}">${layer.kind[0]}</span><span class="name">${escapeHtml(
       layer.name,
     )}</span>`;
     item.addEventListener("click", () => go(layer.id, { via: "layer list" }));
     el.layerList.appendChild(item);
-  }
+  });
 }
 
 /** The back/forward controls + the breadcrumb trail of where you've been, so a
@@ -219,16 +226,31 @@ function renderRight(): void {
   );
 }
 
-function renderAll(): void {
-  renderNav();
-  renderLayerList();
+function renderLineageView(): void {
   renderLineage(
     el.lineage,
-    state.ordered(),
+    state.orderedVisible(),
     state.selectedLayerId,
     (id) => go(id, { via: "lineage" }),
     (childId) => go(childId, { viewMode: "projection", via: "projection" }),
   );
+}
+
+/** Lightweight re-render for scrubbing: the reveal only affects the lineage
+ *  DAG, the layer list, and the timeline itself — never rebuilds the (heavy)
+ *  center graph or touches selection. Keeps "scrub = replay" separate from
+ *  "click = inspect". */
+function renderTrace(): void {
+  renderLayerList();
+  renderLineageView();
+  renderTimeline(el.timeline, state, renderTrace);
+}
+
+function renderAll(): void {
+  renderNav();
+  renderLayerList();
+  renderLineageView();
+  renderTimeline(el.timeline, state, renderTrace);
   renderCenter();
   renderRight();
 }
@@ -274,6 +296,7 @@ function connect(): void {
       }
       renderAll();
     } else if (msg.type === "layer-removed") {
+      stopPlayback();
       state.remove(msg.id);
       renderAll();
     }

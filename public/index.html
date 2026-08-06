@@ -58,6 +58,42 @@
     .lg-hint { font-style: italic; opacity: .8; }
     #kindLegend { display: flex; gap: 10px; padding: 0 12px 8px; color: var(--muted); font-size: 10px; }
     #centerBody { flex: 1; position: relative; overflow: hidden; }
+    /* ---- trace scrubber (timeline) ---- */
+    #timeline { border-top: 1px solid var(--border); background: var(--panel);
+      padding: 6px 10px 8px; user-select: none; }
+    .tl-head { display: flex; align-items: center; gap: 8px; font-size: 11px;
+      color: var(--muted); margin-bottom: 6px; }
+    .tl-btn { background: var(--panel-2); border: 1px solid var(--border); color: var(--text);
+      border-radius: 4px; cursor: pointer; font-size: 10px; padding: 2px 7px; line-height: 1; }
+    .tl-btn:hover { border-color: var(--accent); }
+    .tl-count { font-variant-numeric: tabular-nums; color: var(--text); }
+    .tl-step-cur { color: var(--text); font-weight: 600; max-width: 220px; overflow: hidden;
+      text-overflow: ellipsis; white-space: nowrap; }
+    .tl-tally { margin-left: auto; display: inline-flex; gap: 10px; }
+    .tl-grounded { color: var(--table); }
+    .tl-art { color: var(--muted); }
+    .tl-art.hot { color: #e06c6c; font-weight: 700; }
+    .tl-live { color: var(--muted); }
+    .tl-live.on { color: #5cb85c; }
+    .tl-track { position: relative; cursor: pointer; padding-top: 14px; touch-action: none; }
+    .tl-steps { display: flex; gap: 2px; height: 12px; margin-bottom: 3px; }
+    .tl-step { background: var(--panel-2); border-radius: 3px; font-size: 9px; color: var(--muted);
+      padding: 0 4px; line-height: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      border: 1px solid var(--border); }
+    .tl-step-none { background: transparent; border-color: transparent; }
+    .tl-ticks { display: flex; height: 20px; align-items: center; }
+    .tl-cell { flex: 1; display: flex; justify-content: center; align-items: center; }
+    .tl-tick { width: 10px; height: 10px; border-radius: 50%; background: var(--border);
+      transition: transform .1s; }
+    .tl-tick.kind-graph.on { background: var(--graph); }
+    .tl-tick.kind-table.on { background: var(--table); }
+    .tl-tick.kind-note.on { background: var(--note); }
+    .tl-tick.off { opacity: .3; }
+    .tl-tick.art { box-shadow: 0 0 0 2px #e06c6c; }
+    .tl-tick.cur { transform: scale(1.5); }
+    .tl-playhead { position: absolute; top: 12px; bottom: 0; width: 2px; background: var(--accent);
+      pointer-events: none; transform: translateX(-1px); }
+    .layer-item.future { opacity: .38; }
     #right { grid-area: right; border-left: 1px solid var(--border); background: var(--panel);
       overflow: auto; padding: 12px; }
     .section-title { text-transform: uppercase; letter-spacing: .6px; font-size: 10px;
@@ -178,6 +214,7 @@
       <div id="tableWrap" style="display:none"></div>
       <div id="noteWrap" style="display:none"></div>
     </div>
+    <div id="timeline" style="display:none"></div>
   </main>
   <aside id="right">
     <div class="empty hint" id="rightEmpty">Select a layer to inspect it.</div>

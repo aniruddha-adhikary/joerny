@@ -25,6 +25,11 @@ export class AppState {
   history: NavEntry[] = [];
   histIndex = -1;
 
+  /** Trace scrubber position: the index into `ordered()` up to (and including)
+   *  which layers are "revealed", so scrubbing replays the script's emit order.
+   *  `null` = follow the live tail (reveal everything, jump to new emits). */
+  timeCursor: number | null = null;
+
   get selectedLayerId(): string | null {
     return this.histIndex >= 0 ? this.history[this.histIndex].layerId : null;
   }
@@ -126,6 +131,38 @@ export class AppState {
 
   ordered(): Layer[] {
     return [...this.layers.values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
+  // ---- trace scrubber -------------------------------------------------------
+
+  /** True when the scrubber is parked at the live tail (revealing everything). */
+  cursorFollowing(): boolean {
+    return this.timeCursor === null;
+  }
+
+  /** Resolved cursor index into `ordered()` (last index when following). */
+  cursorIndex(): number {
+    const n = this.layers.size;
+    if (n === 0) return -1;
+    if (this.timeCursor === null) return n - 1;
+    return Math.max(0, Math.min(this.timeCursor, n - 1));
+  }
+
+  /** Move the scrubber. Passing the last index re-attaches to the live tail so
+   *  subsequent emits keep flowing in. */
+  setCursor(index: number): void {
+    const n = this.layers.size;
+    if (n === 0) {
+      this.timeCursor = null;
+      return;
+    }
+    const clamped = Math.max(0, Math.min(index, n - 1));
+    this.timeCursor = clamped >= n - 1 ? null : clamped;
+  }
+
+  /** Layers revealed at the current cursor (emit order, up to and including it). */
+  orderedVisible(): Layer[] {
+    return this.ordered().slice(0, this.cursorIndex() + 1);
   }
 
   selected(): Layer | null {

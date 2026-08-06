@@ -121,6 +121,28 @@ joerny.llmMapping(from, to, "name suggests")  // vs joerny.Mapping(from, to, ev)
 Keep `evidence` (why the link holds) honest and separate from origin (who
 asserted it). Prefer mechanical; when you must guess, say so via origin.
 
+### Trace your script with steps
+
+Wrap phases of a long script in `joerny.step("…"){ … }`. Every layer emitted
+inside the block is tagged with that phase name, so the viewer's timeline reads
+as a **trace of the script** — a scrubber replays your emits in order, groups
+them into the named phases, and shows a running *grounded vs. artificial* tally
+(the anti-hallucination lens: you watch exactly which phase introduces an
+`llm`/`manual` link vs. a `mechanical` one). Steps are the honest unit of a
+trace — a phase boundary you declare, not per-line instrumentation.
+
+```scala
+joerny.step("discover entry points") {
+  joerny.graph("entry-points").nodes(...).emit()
+}
+joerny.step("propose components") {          // if this phase emits llm mappings,
+  joerny.graph("components").project(p).emit() // the timeline flags it as artificial
+}
+```
+
+Emit intermediate layers at the interesting points — the trace is only as
+detailed as the checkpoints you emit.
+
 ## Techniques worth drawing on (NOT a fixed sequence)
 
 These come from real CPG requirements-extraction. Reach for one when its shape
