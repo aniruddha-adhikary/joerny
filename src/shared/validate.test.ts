@@ -74,6 +74,22 @@ test("normalizes edge/mapping provenance and ignores invalid origins", () => {
   assert.equal(res.layer?.mappings?.[0].origin, "manual");
 });
 
+test("preserves a step tag and drops an empty one", () => {
+  const tagged = validateLayer({
+    id: "g",
+    name: "g",
+    kind: "graph",
+    nodes: [{ id: "a" }],
+    step: "propose components",
+  });
+  assert.ok(tagged.ok, tagged.errors.join("; "));
+  assert.equal(tagged.layer?.step, "propose components");
+
+  const untagged = validateLayer({ id: "g", name: "g", kind: "graph", nodes: [{ id: "a" }], step: "" });
+  assert.ok(untagged.ok);
+  assert.equal(untagged.layer?.step, undefined);
+});
+
 test("rejects non-object input", () => {
   assert.equal(validateLayer(null).ok, false);
   assert.equal(validateLayer([]).ok, false);

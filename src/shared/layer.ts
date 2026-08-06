@@ -60,6 +60,10 @@ export interface LayerBase {
   derivedFrom: string[];
   /** Short agent-authored "what/why" for this layer. */
   narration?: string;
+  /** Optional name of the script phase that emitted this layer (set by
+   *  `joerny.step("…"){ … }`). Groups the emit timeline into phases so the
+   *  script's execution reads as a trace. Absent = ungrouped. */
+  step?: string;
   createdAt: string;
   /** Optional node-level mappings to a parent layer. */
   mappings?: NodeMapping[];

@@ -54,6 +54,16 @@ _Avoid_: transformation, mapping set, derivation output
 A generic, on-demand combinator that computes a Projection: `classify` (tag into categories), `groupByKey` (equivalence/fingerprint grouping), `bipartite` (two node types → coupling + clusters), `slice` (reachability/impact). Optional — the agent may also emit raw Layers with hand-authored Mappings.
 _Avoid_: analyzer, transformer, rule
 
+### Script execution over time
+
+**Step**:
+*A named phase of an analysis script* — declared with `joerny.step("…"){ … }`. Every Layer emitted inside the block is tagged with the Step's name, grouping the emit sequence into phases. The honest, high-fidelity unit of a script trace: a boundary the author declares, not per-line instrumentation (Joern runs a `.sc` as a compiled block). Absent = ungrouped.
+_Avoid_: checkpoint, stage, span, milestone
+
+**Trace**:
+*The replayable record of what a script did*, over time. Because every emit is a timestamped checkpoint, the ordered Layer sequence already **is** the trace; the viewer's scrubber folds it from the start up to a time cursor so you watch the Lineage grow in emit order, grouped by Step, with a running mechanical-vs-artificial (see **Origin**) tally — the anti-hallucination lens over time.
+_Avoid_: log, replay, timeline (that's the UI control), history (reserved for nav back/forward)
+
 ### Analysis vocabulary
 
 **Backboning**:

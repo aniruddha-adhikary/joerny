@@ -48,6 +48,7 @@ export function validateLayer(raw: unknown): ValidationResult {
   if (!isStringArray(derivedFrom)) errors.push("`derivedFrom` must be an array of strings");
 
   const narration = raw.narration === undefined ? undefined : String(raw.narration);
+  const step = typeof raw.step === "string" && raw.step.length > 0 ? raw.step : undefined;
   const createdAt = typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString();
 
   let mappings: Layer["mappings"];
@@ -107,6 +108,7 @@ export function validateLayer(raw: unknown): ValidationResult {
     name,
     derivedFrom: derivedFrom as string[],
     narration,
+    step,
     createdAt,
     mappings,
   };
