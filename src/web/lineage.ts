@@ -9,16 +9,16 @@ cytoscape.use(dagre);
  * Renders the lineage DAG (layers as nodes, `derivedFrom` as edges) into the
  * left pane. Tapping a layer node selects it. A derivation edge whose child
  * carries node-level mappings is drawn as an inspectable link labelled with its
- * mapping count — tapping it (`onSelectEdge`) opens the projection that shows
- * *how* the parent's nodes map into the child, i.e. how the transformation was
- * made.
+ * mapping count — single-tapping it selects the child layer (the inspector then
+ * shows its Mappings, i.e. *how* the transformation was made), and
+ * double-tapping opens the Projection view (`onOpenProjection`).
  */
 export function renderLineage(
   container: HTMLElement,
   layers: Layer[],
   selectedId: string | null,
   onSelect: (id: string) => void,
-  onSelectEdge: (childId: string) => void,
+  onOpenProjection: (childId: string) => void,
 ): Core {
   const ids = new Set(layers.map((l) => l.id));
   const elements: cytoscape.ElementDefinition[] = [
@@ -104,10 +104,30 @@ export function renderLineage(
     cy.edges(`[child = "${selectedId}"]`).addClass("hl");
   }
   cy.on("tap", "node", (evt: EventObject) => onSelect(evt.target.id()));
+
+  // Single tap selects the derivation's child (inspector shows its Mappings);
+  // a second tap on the same edge within the double-tap window opens the
+  // Projection. The single action is deferred so a double-tap can cancel it.
+  let pending: ReturnType<typeof setTimeout> | null = null;
+  let lastEdgeId = "";
   cy.on("tap", "edge", (evt: EventObject) => {
     const e = evt.target as cytoscape.EdgeSingular;
-    if ((e.data("maps") as number) > 0) onSelectEdge(e.data("child") as string);
-    else onSelect(e.data("child") as string);
+    const child = e.data("child") as string;
+    const mapped = (e.data("maps") as number) > 0;
+    if (pending && lastEdgeId === e.id()) {
+      clearTimeout(pending);
+      pending = null;
+      lastEdgeId = "";
+      if (mapped) onOpenProjection(child);
+      else onSelect(child);
+      return;
+    }
+    lastEdgeId = e.id();
+    pending = setTimeout(() => {
+      pending = null;
+      lastEdgeId = "";
+      onSelect(child);
+    }, 260);
   });
   cy.on("mouseover", "edge[cls = 'mapped']", () => {
     container.style.cursor = "pointer";
