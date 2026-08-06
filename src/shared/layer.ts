@@ -26,13 +26,15 @@ export interface GraphEdge {
   props?: Record<string, unknown>;
 }
 
-/** Node-level projection: how an item in a parent layer maps into this one. */
+/** A Mapping: how a node in a parent layer maps into this one, with the
+ *  Evidence proving why (see CONTEXT.md). */
 export interface NodeMapping {
   /** Node id in a `derivedFrom` parent layer. */
   from: string;
   /** Node id in this layer. */
   to: string;
-  note?: string;
+  /** Why this mapping holds — the shared key, matched marker, shared table… */
+  evidence?: string;
 }
 
 export interface LayerBase {

@@ -32,10 +32,10 @@ object joerny {
 
   final case class Node(id: String, label: String = null, `type`: String = null, props: Map[String, Any] = Map.empty)
   final case class Edge(src: String, dst: String, `type`: String = null, props: Map[String, Any] = Map.empty)
-  final case class Mapping(from: String, to: String, note: String = null)
+  final case class Mapping(from: String, to: String, evidence: String = null)
 
   /** The computed result of a projection primitive: target nodes, optional edges,
-   *  the provenance-carrying mappings (source node -> target node, `note` = evidence),
+   *  the provenance-carrying mappings (source node -> target node, `evidence` = why),
    *  and a few stats. Feed straight into a graph layer with `.project(result)`. */
   final case class Projection(
     nodes: List[Node] = Nil,
@@ -121,7 +121,7 @@ object joerny {
     val fields = List(
       Some(field("from", jsonVal(m.from))),
       Some(field("to", jsonVal(m.to))),
-      optStr("note", m.note)
+      optStr("evidence", m.evidence)
     ).flatten
     fields.mkString("{", ",", "}")
   }
@@ -219,7 +219,7 @@ object joerny {
   // ---- projection primitives -----------------------------------------------
   //
   // A projection is a function from source nodes to target nodes plus the
-  // mappings that record *why* each source landed where it did (the `note`).
+  // mappings that record *why* each source landed where it did (the `evidence`).
   // These helpers compute the mappings-with-provenance for you so a script can
   // declare intent ("group these by call-shape") instead of hand-typing edges.
   // They are generic and dependency-free — you pass plain ids and functions, so
@@ -260,7 +260,7 @@ object joerny {
 
     /** #1 Classification: tag each item with the first matching rule's category.
      *  Rules are `(categoryId, predicate)` where the predicate returns `Some(evidence)`
-     *  on a match; the evidence becomes the mapping's provenance note. Unmatched items
+     *  on a match; that string becomes the mapping's evidence. Unmatched items
      *  are counted in stats but not mapped. */
     def classify[A](items: Iterable[A], id: A => String, rules: Seq[(String, A => Option[String])]): Projection = {
       val ms = scala.collection.mutable.ListBuffer.empty[Mapping]

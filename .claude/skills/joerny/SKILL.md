@@ -82,27 +82,27 @@ joerny.note("summary").from("components")
 The human wants to *see how one representation projects into the next* ("these
 methods → this component", "old job → new config"). Don't hand-author mapping
 edges. Compute them with the **`joerny.derive.*` primitives**, which return a
-`Projection` (target nodes + edges + **provenance-carrying mappings** where each
-`note` is the evidence) that you merge with `.project(...)`:
+`Projection` (target nodes + edges + **Mappings**, each carrying the **evidence**
+that proves why the source maps to the target) that you merge with `.project(...)`:
 
 ```scala
 val comp = joerny.derive.groupByKey(methods, _.fullName, fingerprintOf)
 joerny.graph("components").from("methods").project(comp).emit()
-// each method → its component, note = "shared key: <fingerprint>"
+// each method → its component, evidence = "shared key: <fingerprint>"
 ```
 
 Available primitives (all take plain ids + functions — wire them to *your*
 queries; skip them and emit raw when they don't fit):
 
-| Primitive | Use when | Provenance note |
+| Primitive | Use when | Mapping evidence |
 |---|---|---|
 | `derive.classify(items, id, rules)` | tagging entities into categories | the marker that matched |
 | `derive.groupByKey(items, id, key)` | equivalence/fingerprint grouping | the shared key |
 | `derive.bipartite(pairs, minShared[, maxHubShare])` | two node types → coupling + clusters; raise `minShared` or lower `maxHubShare` to drop ubiquitous hubs (backboning) so dense projections separate | the shared right-nodes / cluster / hubs dropped |
 | `derive.slice(seeds, edges, maxDepth)` | reachability / impact / dependency scope | discovery depth |
 
-`.map(joerny.Mapping(from, to, note))` is still there for the rare bespoke edge,
-but prefer computed projections so the relationship is inspectable.
+`.map(joerny.Mapping(from, to, evidence))` is still there for the rare bespoke
+mapping, but prefer computed projections so the relationship is inspectable.
 
 ## Techniques worth drawing on (NOT a fixed sequence)
 

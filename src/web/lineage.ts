@@ -1,32 +1,45 @@
 import cytoscape, { type Core, type EventObject } from "cytoscape";
 import dagre from "cytoscape-dagre";
 import type { Layer } from "../shared/layer.js";
+import { KIND_COLORS } from "./colors.js";
 
 cytoscape.use(dagre);
 
-const KIND_COLOR: Record<string, string> = {
-  graph: "#6ea8fe",
-  table: "#7ed6a5",
-  note: "#e0b978",
-};
-
 /**
  * Renders the lineage DAG (layers as nodes, `derivedFrom` as edges) into the
- * left pane. Tapping a layer selects it.
+ * left pane. Tapping a layer node selects it. A derivation edge whose child
+ * carries node-level mappings is drawn as an inspectable link labelled with its
+ * mapping count — tapping it (`onSelectEdge`) opens the projection that shows
+ * *how* the parent's nodes map into the child, i.e. how the transformation was
+ * made.
  */
 export function renderLineage(
   container: HTMLElement,
   layers: Layer[],
   selectedId: string | null,
   onSelect: (id: string) => void,
+  onSelectEdge: (childId: string) => void,
 ): Core {
   const ids = new Set(layers.map((l) => l.id));
   const elements: cytoscape.ElementDefinition[] = [
-    ...layers.map((l) => ({ data: { id: l.id, label: l.name, color: KIND_COLOR[l.kind] ?? "#b0bac9" } })),
+    ...layers.map((l) => ({ data: { id: l.id, label: l.name, color: KIND_COLORS[l.kind] ?? "#b0bac9" } })),
   ];
   for (const l of layers) {
+    const maps = l.mappings?.length ?? 0;
     for (const parent of l.derivedFrom) {
-      if (ids.has(parent)) elements.push({ data: { id: `${parent}->${l.id}`, source: parent, target: l.id } });
+      if (ids.has(parent)) {
+        elements.push({
+          data: {
+            id: `${parent}->${l.id}`,
+            source: parent,
+            target: l.id,
+            child: l.id,
+            maps,
+            label: maps > 0 ? `${maps}` : "",
+            cls: maps > 0 ? "mapped" : "plain",
+          },
+        });
+      }
     }
   }
 
@@ -62,14 +75,45 @@ export function renderLineage(
           "arrow-scale": 0.7,
         },
       },
+      {
+        // A derivation with computed node-level mappings is clickable → projection.
+        selector: "edge[cls = 'mapped']",
+        style: {
+          "line-color": "#63cbd0",
+          "target-arrow-color": "#63cbd0",
+          label: "data(label)",
+          "font-size": 8,
+          color: "#63cbd0",
+          "text-background-color": "#0f1115",
+          "text-background-opacity": 1,
+          "text-background-padding": "1px",
+        },
+      },
+      { selector: "edge.hl", style: { "line-color": "#6ea8fe", "target-arrow-color": "#6ea8fe", width: 2.5 } },
       { selector: "node.selected", style: { "border-width": 3, "border-color": "#fff" } },
     ],
-    layout: { name: "dagre", rankDir: "TB", nodeSep: 12, rankSep: 26 } as cytoscape.LayoutOptions,
+    layout: { name: "dagre", rankDir: "TB", nodeSep: 12, rankSep: 30 } as cytoscape.LayoutOptions,
     userZoomingEnabled: true,
     userPanningEnabled: true,
   });
 
-  if (selectedId) cy.$id(selectedId).addClass("selected");
+  if (selectedId) {
+    cy.$id(selectedId).addClass("selected");
+    // Light up the derivations feeding the selected layer so its provenance
+    // reads at a glance.
+    cy.edges(`[child = "${selectedId}"]`).addClass("hl");
+  }
   cy.on("tap", "node", (evt: EventObject) => onSelect(evt.target.id()));
+  cy.on("tap", "edge", (evt: EventObject) => {
+    const e = evt.target as cytoscape.EdgeSingular;
+    if ((e.data("maps") as number) > 0) onSelectEdge(e.data("child") as string);
+    else onSelect(e.data("child") as string);
+  });
+  cy.on("mouseover", "edge[cls = 'mapped']", () => {
+    container.style.cursor = "pointer";
+  });
+  cy.on("mouseout", "edge", () => {
+    container.style.cursor = "default";
+  });
   return cy;
 }

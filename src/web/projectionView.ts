@@ -60,7 +60,7 @@ function build(state: AppState, layer: Layer): Built {
       addSource(m.from, src?.label ?? m.from.split(/[.#]/).pop() ?? m.from, src?.type);
       addTarget(m.to, m.to.split(/[.#]/).pop() ?? m.to);
       elements.push({
-        data: { id: `m${edgeCount++}`, source: `src::${m.from}`, target: `dst::${m.to}`, label: m.note ?? "" },
+        data: { id: `m${edgeCount++}`, source: `src::${m.from}`, target: `dst::${m.to}`, label: m.evidence ?? "" },
       });
     }
   } else if (layer.kind === "graph") {

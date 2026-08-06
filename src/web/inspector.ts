@@ -42,13 +42,13 @@ export function renderInspector(
   parts.push(`<div class="kv">${meta.join("")}</div>`);
 
   if (layer.mappings && layer.mappings.length) {
-    parts.push(`<h3>Projections (${layer.mappings.length})</h3>`);
+    parts.push(`<h3>Mappings (${layer.mappings.length})</h3>`);
     const rows = layer.mappings
       .slice(0, 50)
       .map(
         (m) =>
           `<div class="hint"><code>${escapeHtml(m.from)}</code> → <code>${escapeHtml(m.to)}</code>${
-            m.note ? ` — ${escapeHtml(m.note)}` : ""
+            m.evidence ? ` — ${escapeHtml(m.evidence)}` : ""
           }</div>`,
       )
       .join("");

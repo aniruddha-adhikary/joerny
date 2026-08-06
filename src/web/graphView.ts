@@ -2,26 +2,9 @@ import cytoscape, { type Core, type EventObject } from "cytoscape";
 import dagre from "cytoscape-dagre";
 import type { GraphLayer } from "../shared/layer.js";
 import { measure, present } from "./viewHeuristics.js";
+import { buildTypePalette, edgeColor } from "./colors.js";
 
 cytoscape.use(dagre);
-
-const TYPE_COLORS = ["#6ea8fe", "#7ed6a5", "#e0b978", "#c88ffb", "#f28ca4", "#63cbd0", "#b0bac9"];
-
-// Semantic edge colours so relationship kind reads without any text label.
-const EDGE_COLORS: Record<string, string> = {
-  read: "#7ed6a5",
-  write: "#e0879a",
-  calls: "#3a4252",
-  then: "#6ea8fe",
-  uses: "#63cbd0",
-};
-const EDGE_DEFAULT = "#3a4252";
-
-function colorForType(type: string | undefined, palette: Map<string, string>): string {
-  const key = type ?? "_";
-  if (!palette.has(key)) palette.set(key, TYPE_COLORS[palette.size % TYPE_COLORS.length]);
-  return palette.get(key) as string;
-}
 
 export interface GraphViewHandle {
   cy: Core;
@@ -40,7 +23,7 @@ export function renderGraph(
   layer: GraphLayer,
   onSelect: (nodeId: string | null) => void,
 ): GraphViewHandle {
-  const palette = new Map<string, string>();
+  const palette = buildTypePalette(layer.nodes.map((n) => n.type));
   const nodeIds = new Set(layer.nodes.map((n) => n.id));
   const edges = layer.edges.filter((e) => nodeIds.has(e.src) && nodeIds.has(e.dst));
 
@@ -50,7 +33,7 @@ export function renderGraph(
 
   const elements: cytoscape.ElementDefinition[] = [
     ...layer.nodes.map((n) => ({
-      data: { id: n.id, label: n.label, type: n.type ?? "", color: colorForType(n.type, palette) },
+      data: { id: n.id, label: n.label, type: n.type ?? "", color: palette.get(n.type ?? "") ?? "#b0bac9" },
     })),
     ...edges.map((e, i) => ({
       data: {
@@ -58,7 +41,7 @@ export function renderGraph(
         source: e.src,
         target: e.dst,
         label: e.type ?? "",
-        color: EDGE_COLORS[e.type ?? ""] ?? EDGE_DEFAULT,
+        color: edgeColor(e.type),
       },
     })),
   ];
