@@ -16,6 +16,18 @@ const KIND_MEANING: Record<string, string> = {
   note: "markdown",
 };
 
+// Friendly labels for meaning-bearing node types (requirements/facts/coverage).
+const TYPE_MEANING: Record<string, string> = {
+  requirement: "requirement (supported)",
+  "req-unverified": "requirement (unverified)",
+  "req-unsupported": "requirement (unsupported)",
+  "fact-flow": "fact: flow step",
+  "fact-table": "fact: table",
+  "fact-capability": "fact: capability",
+  covered: "covered by a requirement",
+  gap: "gap: no requirement",
+};
+
 /**
  * Builds the legend for the currently shown view. It reflects *what is actually
  * on screen* — the layer kind, the node types present (with their colours) and
@@ -28,14 +40,14 @@ export function legendHtml(layer: Layer, mode: "primary" | "projection"): string
   if (mode === "projection") {
     parts.push(dot("#8b93a7", "parent (source)"));
     parts.push(dot(KIND_COLORS.graph, "derived (this layer)"));
-    parts.push(`<span class="lg-hint">hover a node to reveal its mapping notes</span>`);
+    parts.push(`<span class="lg-hint">hover a node to reveal its mapping evidence</span>`);
     return parts.join("");
   }
 
   if (layer.kind === "graph") {
     const palette = buildTypePalette(layer.nodes.map((n) => n.type));
     const types = Array.from(new Set(layer.nodes.map((n) => n.type).filter((t): t is string => !!t))).sort();
-    for (const t of types) parts.push(dot(palette.get(t) ?? "#b0bac9", t));
+    for (const t of types) parts.push(dot(palette.get(t) ?? "#b0bac9", TYPE_MEANING[t] ?? t));
 
     const edgeTypes = Array.from(new Set(layer.edges.map((e) => e.type).filter((t): t is string => !!t))).sort();
     for (const t of edgeTypes) parts.push(line(edgeColor(t), t));

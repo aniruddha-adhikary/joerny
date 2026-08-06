@@ -7,11 +7,26 @@ export const EDGE_COLORS: Record<string, string> = {
   calls: "#3a4252",
   then: "#6ea8fe",
   uses: "#63cbd0",
+  cites: "#c88ffb",
 };
 export const EDGE_DEFAULT = "#3a4252";
 
 // Palette assigned to node *types* in a stable order.
 export const TYPE_COLORS = ["#6ea8fe", "#7ed6a5", "#e0b978", "#c88ffb", "#f28ca4", "#63cbd0", "#b0bac9"];
+
+// Semantic node-type colours that carry meaning (status, roles) — these override
+// the rotating palette so e.g. an UNSUPPORTED requirement is always red, a gap
+// always orange, regardless of how many other types share the graph.
+export const SEMANTIC_TYPE_COLORS: Record<string, string> = {
+  requirement: "#7ed6a5", // supported (green)
+  "req-unverified": "#e0b978", // amber
+  "req-unsupported": "#f0616d", // red
+  "fact-flow": "#6ea8fe",
+  "fact-table": "#63cbd0",
+  "fact-capability": "#c88ffb",
+  covered: "#7ed6a5",
+  gap: "#e0955a",
+};
 
 // Layer-kind colours (mirror the CSS custom properties).
 export const KIND_COLORS: Record<string, string> = {
@@ -28,7 +43,18 @@ export const KIND_COLORS: Record<string, string> = {
 export function buildTypePalette(types: Array<string | undefined>): Map<string, string> {
   const distinct = Array.from(new Set(types.map((t) => t ?? ""))).sort();
   const palette = new Map<string, string>();
-  distinct.forEach((t, i) => palette.set(t, TYPE_COLORS[i % TYPE_COLORS.length]));
+  // Types without a semantic colour rotate through TYPE_COLORS; semantic ones
+  // keep their fixed meaning-bearing colour.
+  let i = 0;
+  for (const t of distinct) {
+    const semantic = SEMANTIC_TYPE_COLORS[t];
+    if (semantic) {
+      palette.set(t, semantic);
+    } else {
+      palette.set(t, TYPE_COLORS[i % TYPE_COLORS.length]);
+      i += 1;
+    }
+  }
   return palette;
 }
 

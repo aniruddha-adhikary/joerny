@@ -95,6 +95,24 @@
       border: 1px solid var(--border); cursor: pointer; }
     .chip:hover { border-color: var(--accent); }
     .hint { color: var(--muted); font-size: 12px; }
+    /* Requirement / evidence inspector */
+    pre.code { background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px;
+      padding: 8px 10px; margin: 0 0 12px; overflow: auto; max-height: 320px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px;
+      line-height: 1.45; white-space: pre; color: #d6dbe6; }
+    pre.code.src { max-height: 420px; }
+    .req-text { margin: 0 0 12px; padding: 8px 12px; border-left: 3px solid var(--accent);
+      background: var(--panel-2); border-radius: 0 6px 6px 0; font-size: 13px; }
+    .status-line { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+    .status-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px;
+      padding: 2px 8px; border-radius: 10px; color: #0f1115; }
+    .status-badge.st-supported { background: #7ed6a5; }
+    .status-badge.st-unverified { background: #e0b978; }
+    .status-badge.st-unsupported { background: #f0616d; color: #fff; }
+    .gate { color: var(--muted); font-size: 11px; }
+    .callout { background: rgba(240,97,109,.12); border: 1px solid #f0616d; color: #f4a6ad;
+      border-radius: 6px; padding: 6px 10px; margin-bottom: 10px; font-size: 12px; }
+    .loc { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); font-weight: 400; }
     a { color: var(--accent); }
   </style>
 </head>

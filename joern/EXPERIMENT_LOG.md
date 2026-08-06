@@ -86,6 +86,85 @@ skill is written as an on-demand toolbox: reach for a primitive when its shape
 fits, invent a raw query when it doesn't, and always emit provenance so the
 projection is inspectable.
 
+---
+
+# Experiment 2 — evidence-backed requirements reconstruction (`requirements.sc`)
+
+Goal: can joerny compile a PRD/BRD-shaped spec from the CPG where **every
+sentence traces back to code**, with the LLM only phrasing — never inventing —
+the facts? Run against `oldent-cpg.bin` (111 files, 1284 methods, 4 `main()`s).
+
+The pipeline is `CPG → mechanical Fact → templated Requirement → cites/evidence →
+inspector`. Facts (entry points, capabilities, SQL tables, flow steps + CDG
+guards) each carry a stable id, exact `file:line`, and a source snippet resolved
+from the repo (the CPG stores almost no source text, so `requirements.sc` takes a
+`repoRoot`). Requirements are string templates that *cite fact ids*; a mechanical
+gate grades each one:
+
+- **SUPPORTED** — every cited id resolves and every uppercase token it names
+  (tables, protocols) appears in the cited evidence.
+- **UNVERIFIED** — cites real facts, but a named token isn't in that evidence.
+- **UNSUPPORTED** — cites an id that doesn't exist.
+
+Two bad requirements are injected on purpose (`tbl:PAYMENTS` → UNSUPPORTED; a
+`SETTLEMENTS` claim citing an unrelated flow fact → UNVERIFIED) to prove the gate
+fires. Result: `requirements=30 status=SUPPORTED×28,UNSUPPORTED×1,UNVERIFIED×1`.
+
+**What the CPG genuinely recovered** (no names matched — behaviour from structure):
+`EngineMain.main` bootstraps the DB then `insertSampleData` into `CLIENTS` /
+`PRICING_CACHE` (the inlined DDL is read straight from the literal), 12 tables
+with read/write direction inferred from the SQL verb, 5 integration capabilities
+from receiver-type carriers, and a CDG guard (`is != null`) lifted into a
+business-rule requirement.
+
+## Which UX patterns stuck (the brief was "try a bunch, see what sticks")
+
+- **Code/Evidence pane (Sourcetrail) — stuck, biggest win.** Selecting any fact
+  or gap node shows its evidence string *and* the exact source method from disk.
+  This is what makes a requirement believable. Reordered the inspector so the
+  selected node's evidence/source sits *above* the layer-wide mapping table, and
+  filtered the mappings to just the ones touching the selected node — otherwise a
+  40-row projection list buried the source.
+- **Mechanical status badges + citation gate (RAG grounding) — stuck.** The
+  ✓/⚠/✗ glyphs in the doc and the colored requirement nodes (green/amber/red)
+  make the un-verifiable statements impossible to miss, and the injected fakes
+  visibly fail. This is the anti-hallucination core.
+- **Coverage as covered/gap (RTM) — stuck, once it showed real gaps.** First cut
+  only scored entry points + capabilities → 9/9 green, a useless all-pass. The
+  valuable RTM direction is *code with no requirement*: scoring every DB-touching
+  method flips it to **23 covered / 48 gaps**, each gap clickable to its
+  un-specified source (`BaseDAO.queryList`, `KYCStatusRule.lookupKycStatus`, …).
+- **Shape-driven layout for edgeless sets — added.** The coverage layer has no
+  edges, so dagre/cose stacked 71 nodes into one unreadable column; an edgeless
+  graph now lays out as a near-square **grid**, so the covered/gap ratio reads at
+  a glance.
+- **Rendered doc as a Note layer — stuck.** The PRD/BRD is template-filled from
+  facts and emitted as markdown, with an explicit *Boundaries* section listing
+  what the CPG can't carry (SLA, business meaning, external schemas) — i.e. where
+  the human/LLM is actually needed.
+- **Not yet built:** inline citation *chips* (today citations are backtick ids +
+  a graph edge, not hover-preview chips) and dbt-style transform-vs-passthrough
+  edge styling. Both are additive.
+
+## Honest limits of this slice
+
+- The flow tree follows one richest production entry point (`EngineMain`, demo/test
+  excluded) expanded one level into own-code callees; deep cross-job behaviour is
+  covered by data/capability requirements, not the flow narrative.
+- "read/write" direction is from the SQL verb in the *nearest* literal; a method
+  that both selects and updates is labelled read/write, not per-statement.
+- The gate proves *internal* consistency (claim ↔ cited code), not business
+  correctness — that's the Boundaries section's job.
+
+## Reproduce Experiment 2
+
+```bash
+export JOERNY_DIR="$PWD/.joerny/current/layers"
+joern --script joern/requirements.sc \
+  --param cpgPath=/path/to/oldent-cpg.bin \
+  --param repoRoot=/path/to/old-enterprise-java-samples
+```
+
 ## Reproduce
 
 ```bash

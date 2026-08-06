@@ -77,7 +77,12 @@ export function present(shape: Shape, opts: { preferDagreLR?: boolean } = {}): P
   const useDagre = (opts.preferDagreLR && !hubby && !crowded) || (treeLike && !hubby);
 
   let layout: cytoscape.LayoutOptions;
-  if (useDagre) {
+  if (m === 0) {
+    // No edges = a pure classification set (e.g. coverage covered/gap). A single
+    // column is unreadable; a near-square grid packs it and stays scannable.
+    const cols = Math.max(1, Math.ceil(Math.sqrt(n)));
+    layout = { name: "grid", cols, condense: true, spacingFactor } as cytoscape.LayoutOptions;
+  } else if (useDagre) {
     // Hierarchical: node/rank separation scales with node count.
     const nodeSep = Math.min(18 + n, 60);
     const rankSep = opts.preferDagreLR ? 220 : Math.min(90 + n * 2, 200);

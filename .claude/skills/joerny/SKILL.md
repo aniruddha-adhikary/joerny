@@ -109,7 +109,11 @@ mapping, but prefer computed projections so the relationship is inspectable.
 These come from real CPG requirements-extraction. Reach for one when its shape
 fits the mission; ignore the rest. See `joern/experiments.sc` for a reference
 run across three different codebases and `joern/EXPERIMENT_LOG.md` for where each
-holds up vs. breaks.
+holds up vs. breaks. `joern/requirements.sc` is a second reference: it compiles
+evidence-backed PRD/BRD requirements from a CPG (fact → templated requirement →
+citation gate → coverage), keeping every statement traceable to `file:line`
+source — reach for it when the mission is requirements reconstruction, not as a
+mandatory pipeline.
 
 - **Behavior = graph structure, never method names.** Classify a method/job by
   the **receiver type** of what it calls (e.g. `javax.jms.*`,
