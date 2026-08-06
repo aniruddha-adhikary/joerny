@@ -1,4 +1,10 @@
-import type { GraphEdge, GraphNode, Layer, LayerKind } from "./layer.js";
+import type { EdgeOrigin, GraphEdge, GraphNode, Layer, LayerKind } from "./layer.js";
+
+const ORIGINS: EdgeOrigin[] = ["mechanical", "llm", "manual"];
+
+function asOrigin(v: unknown): EdgeOrigin | undefined {
+  return typeof v === "string" && ORIGINS.includes(v as EdgeOrigin) ? (v as EdgeOrigin) : undefined;
+}
 
 export interface ValidationResult {
   ok: boolean;
@@ -52,7 +58,12 @@ export function validateLayer(raw: unknown): ValidationResult {
       mappings = [];
       for (const m of raw.mappings) {
         if (isObject(m) && typeof m.from === "string" && typeof m.to === "string") {
-          mappings.push({ from: m.from, to: m.to, evidence: m.evidence === undefined ? undefined : String(m.evidence) });
+          mappings.push({
+            from: m.from,
+            to: m.to,
+            evidence: m.evidence === undefined ? undefined : String(m.evidence),
+            origin: asOrigin(m.origin),
+          });
         } else {
           errors.push("each mapping needs string `from` and `to`");
         }
@@ -136,6 +147,7 @@ function normalizeEdges(edges: unknown[]): GraphEdge[] {
       src: o.src as string,
       dst: o.dst as string,
       type: typeof o.type === "string" ? o.type : undefined,
+      origin: asOrigin(o.origin),
       props: isObject(o.props) ? o.props : undefined,
     };
   });

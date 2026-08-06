@@ -52,6 +52,28 @@ test("validates note layers and preserves lineage + mappings", () => {
   assert.equal(res.layer?.mappings?.[0].evidence, "projected");
 });
 
+test("normalizes edge/mapping provenance and ignores invalid origins", () => {
+  const res = validateLayer({
+    id: "g",
+    name: "g",
+    kind: "graph",
+    nodes: [{ id: "a" }, { id: "b" }],
+    edges: [
+      { src: "a", dst: "b", origin: "llm" },
+      { src: "b", dst: "a", origin: "bogus" },
+      { src: "a", dst: "a" },
+    ],
+    mappings: [{ from: "a", to: "b", origin: "manual" }],
+  });
+  assert.ok(res.ok, res.errors.join("; "));
+  if (res.layer?.kind === "graph") {
+    assert.equal(res.layer.edges[0].origin, "llm");
+    assert.equal(res.layer.edges[1].origin, undefined); // invalid value dropped → default mechanical
+    assert.equal(res.layer.edges[2].origin, undefined); // absent → default mechanical
+  }
+  assert.equal(res.layer?.mappings?.[0].origin, "manual");
+});
+
 test("rejects non-object input", () => {
   assert.equal(validateLayer(null).ok, false);
   assert.equal(validateLayer([]).ok, false);

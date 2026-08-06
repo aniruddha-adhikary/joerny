@@ -9,6 +9,16 @@ const dot = (color: string, label: string): string =>
   `<span class="lg-item"><span class="lg-dot" style="background:${color}"></span>${esc(label)}</span>`;
 const line = (color: string, label: string): string =>
   `<span class="lg-item"><span class="lg-line" style="background:${color}"></span>${esc(label)}</span>`;
+// A styled connector sample (solid/dashed/dotted) for the provenance legend.
+const originLine = (style: "solid" | "dashed" | "dotted", label: string): string =>
+  `<span class="lg-item"><span class="lg-origin lg-origin-${style}"></span>${esc(label)}</span>`;
+
+/** Whether any edge/mapping in the layer carries a non-mechanical (artificial) origin. */
+function hasArtificialOrigin(layer: Layer): boolean {
+  const mapArtificial = (layer.mappings ?? []).some((m) => m.origin && m.origin !== "mechanical");
+  const edgeArtificial = layer.kind === "graph" && layer.edges.some((e) => e.origin && e.origin !== "mechanical");
+  return mapArtificial || edgeArtificial;
+}
 
 const KIND_MEANING: Record<string, string> = {
   graph: "nodes + edges",
@@ -37,9 +47,20 @@ export function legendHtml(layer: Layer, mode: "primary" | "projection"): string
   const parts: string[] = [];
   parts.push(`<span class="lg-item"><span class="lg-badge kind-${layer.kind}">${layer.kind}</span>${esc(KIND_MEANING[layer.kind] ?? "")}</span>`);
 
+  // Provenance legend — only shown when the layer actually contains an
+  // artificial (LLM/manual) connection, so the meaning of dashed/dotted lines
+  // is never a mystery, and solid stays implicitly "computed" otherwise.
+  const provenance = (): void => {
+    if (!hasArtificialOrigin(layer)) return;
+    parts.push(originLine("solid", "computed (mechanical)"));
+    parts.push(originLine("dashed", "LLM-inferred"));
+    parts.push(originLine("dotted", "manual"));
+  };
+
   if (mode === "projection") {
     parts.push(dot("#8b93a7", "parent (source)"));
     parts.push(dot(KIND_COLORS.graph, "derived (this layer)"));
+    provenance();
     parts.push(`<span class="lg-hint">hover a node to reveal its mapping evidence</span>`);
     return parts.join("");
   }
@@ -51,6 +72,7 @@ export function legendHtml(layer: Layer, mode: "primary" | "projection"): string
 
     const edgeTypes = Array.from(new Set(layer.edges.map((e) => e.type).filter((t): t is string => !!t))).sort();
     for (const t of edgeTypes) parts.push(line(edgeColor(t), t));
+    provenance();
     if (types.length + edgeTypes.length === 0) parts.push(`<span class="lg-hint">untyped nodes/edges</span>`);
   } else if (layer.kind === "table") {
     parts.push(`<span class="lg-hint">${layer.rows.length} rows × ${layer.columns.length} cols</span>`);

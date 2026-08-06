@@ -9,6 +9,16 @@
 
 export type LayerKind = "graph" | "table" | "note";
 
+/**
+ * Provenance of a connection (edge or mapping): how it came to exist.
+ *  - `mechanical`: computed from the CPG / a deterministic rule (authoritative).
+ *  - `llm`: inferred or inserted by a language model (not ground truth).
+ *  - `manual`: hand-authored by a human.
+ * Absent = `mechanical` (back-compatible default). Rendered distinctly so an
+ * artificial (llm/manual) connection is always visibly marked.
+ */
+export type EdgeOrigin = "mechanical" | "llm" | "manual";
+
 export interface GraphNode {
   /** Stable, meaningful id (prefer method fullName etc.) so the same entity
    *  merges across layers. */
@@ -23,6 +33,8 @@ export interface GraphEdge {
   src: string;
   dst: string;
   type?: string;
+  /** How this edge came to exist; defaults to `mechanical` when absent. */
+  origin?: EdgeOrigin;
   props?: Record<string, unknown>;
 }
 
@@ -35,6 +47,8 @@ export interface NodeMapping {
   to: string;
   /** Why this mapping holds — the shared key, matched marker, shared table… */
   evidence?: string;
+  /** How this mapping came to exist; defaults to `mechanical` when absent. */
+  origin?: EdgeOrigin;
 }
 
 export interface LayerBase {

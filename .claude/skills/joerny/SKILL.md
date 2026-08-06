@@ -104,6 +104,23 @@ queries; skip them and emit raw when they don't fit):
 `.map(joerny.Mapping(from, to, evidence))` is still there for the rare bespoke
 mapping, but prefer computed projections so the relationship is inspectable.
 
+### Mark artificial connections (provenance)
+
+Every edge and mapping carries an **origin**: `mechanical` (computed from the
+CPG — the default, don't set it) vs. an *artificial* link you couldn't prove
+mechanically. When **you (the model) infer or insert** a relationship — a guess
+from naming, a plausible grouping the CPG doesn't back — mark it so the viewer
+renders it dashed and never lets it pass as a fact:
+
+```scala
+joerny.llmEdge(a, b, "resembles")            // vs joerny.Edge(a, b, "calls")
+joerny.llmMapping(from, to, "name suggests")  // vs joerny.Mapping(from, to, ev)
+// hand-authored by a human: joerny.Edge(a, b, t, origin = "manual")
+```
+
+Keep `evidence` (why the link holds) honest and separate from origin (who
+asserted it). Prefer mechanical; when you must guess, say so via origin.
+
 ## Techniques worth drawing on (NOT a fixed sequence)
 
 These come from real CPG requirements-extraction. Reach for one when its shape

@@ -60,7 +60,13 @@ function build(state: AppState, layer: Layer): Built {
       addSource(m.from, src?.label ?? m.from.split(/[.#]/).pop() ?? m.from, src?.type);
       addTarget(m.to, m.to.split(/[.#]/).pop() ?? m.to);
       elements.push({
-        data: { id: `m${edgeCount++}`, source: `src::${m.from}`, target: `dst::${m.to}`, label: m.evidence ?? "" },
+        data: {
+          id: `m${edgeCount++}`,
+          source: `src::${m.from}`,
+          target: `dst::${m.to}`,
+          label: m.evidence ?? "",
+          origin: m.origin ?? "mechanical",
+        },
       });
     }
   } else if (layer.kind === "graph") {
@@ -144,6 +150,9 @@ export function renderProjection(
           opacity: p.edgeOpacity,
         },
       },
+      // Provenance: dashed = LLM-inferred mapping, dotted = manual, solid = computed.
+      { selector: "edge[origin = 'llm']", style: { "line-style": "dashed", "line-dash-pattern": [6, 3] } },
+      { selector: "edge[origin = 'manual']", style: { "line-style": "dotted" } },
       { selector: ".faded", style: { opacity: 0.06 } },
       {
         selector: "edge.lit",

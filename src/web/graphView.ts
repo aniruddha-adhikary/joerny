@@ -42,6 +42,7 @@ export function renderGraph(
         target: e.dst,
         label: e.type ?? "",
         color: edgeColor(e.type),
+        origin: e.origin ?? "mechanical",
       },
     })),
   ];
@@ -90,6 +91,11 @@ export function renderGraph(
           opacity: p.edgeOpacity,
         },
       },
+      // Provenance: mechanical edges are solid (authoritative); an LLM-inferred
+      // link is dashed and a manual one dotted, so a guess never looks like a
+      // computed fact (cf. InferaGraph dashing AI-discovered edges).
+      { selector: "edge[origin = 'llm']", style: { "line-style": "dashed", "line-dash-pattern": [6, 3] } },
+      { selector: "edge[origin = 'manual']", style: { "line-style": "dotted" } },
       { selector: "node.lbl", style: { label: "data(label)", "z-index": 20, "font-size": p.fontSize + 1 } },
       { selector: ".faded", style: { opacity: 0.06 } },
       {
