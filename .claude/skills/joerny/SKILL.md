@@ -88,9 +88,11 @@ joerny.note("summary")
 - **Declare lineage with `.from(parentId, ...)`** whenever a layer is derived
   from an earlier one. This is what draws the pipeline.
 - **Show projections** between stages with `.map(joerny.Mapping(fromNodeId,
-  toNodeId, "note"))` or `.mapNodes(pairs)` — e.g. which jobs collapse into which
-  component. The human specifically wants to *see how one representation projects
-  into the next*.
+  toNodeId, "note"))` or `.mapNodes(pairs)` — e.g. which shared methods make up
+  which component. The human specifically wants to *see how one representation
+  projects into the next*. These mappings power the browser's **Projection**
+  tab, which draws parent nodes → this layer's nodes with the mapping edges, so
+  make `fromNodeId` a node id that exists in a parent layer (its `.from(...)`).
 - **Emit as you go**, phase by phase — don't wait until the end. The point is a
   live picture of your exploration.
 - Keep graphs focused (derived/aggregated views, not the raw 100k-node CPG).

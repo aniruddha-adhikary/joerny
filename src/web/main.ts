@@ -2,12 +2,14 @@ import { marked } from "marked";
 import type { ServerMessage } from "../shared/layer.js";
 import { AppState } from "./state.js";
 import { renderGraph, type GraphViewHandle } from "./graphView.js";
+import { renderProjection, type ProjectionHandle } from "./projectionView.js";
 import { renderLineage } from "./lineage.js";
 import { renderInspector } from "./inspector.js";
 
 const state = new AppState();
 let selectedNodeId: string | null = null;
 let graphHandle: GraphViewHandle | null = null;
+let projectionHandle: ProjectionHandle | null = null;
 
 const el = {
   status: document.getElementById("status") as HTMLElement,
@@ -21,7 +23,23 @@ const el = {
   noteWrap: document.getElementById("noteWrap") as HTMLElement,
   rightEmpty: document.getElementById("rightEmpty") as HTMLElement,
   inspector: document.getElementById("inspector") as HTMLElement,
+  toolbar: document.getElementById("centerToolbar") as HTMLElement,
+  tabPrimary: document.getElementById("tabPrimary") as HTMLElement,
+  tabProjection: document.getElementById("tabProjection") as HTMLElement,
+  projection: document.getElementById("projection") as HTMLElement,
+  projLegend: document.getElementById("projLegend") as HTMLElement,
 };
+
+el.tabPrimary.addEventListener("click", () => setViewMode("primary"));
+el.tabProjection.addEventListener("click", () => {
+  if (el.tabProjection.hasAttribute("disabled")) return;
+  setViewMode("projection");
+});
+
+function setViewMode(mode: "primary" | "projection"): void {
+  state.viewMode = mode;
+  renderCenter();
+}
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) =>
@@ -49,9 +67,10 @@ function renderLayerList(): void {
   }
 }
 
-function showCenter(which: "empty" | "cy" | "table" | "note"): void {
+function showCenter(which: "empty" | "cy" | "table" | "note" | "projection"): void {
   el.centerEmpty.style.display = which === "empty" ? "flex" : "none";
   el.cy.style.display = which === "cy" ? "block" : "none";
+  el.projection.style.display = which === "projection" ? "block" : "none";
   el.tableWrap.style.display = which === "table" ? "block" : "none";
   el.noteWrap.style.display = which === "note" ? "block" : "none";
 }
@@ -61,11 +80,40 @@ function renderCenter(): void {
     graphHandle.destroy();
     graphHandle = null;
   }
+  if (projectionHandle) {
+    projectionHandle.destroy();
+    projectionHandle = null;
+  }
   const layer = state.selected();
   if (!layer) {
+    el.toolbar.style.display = "none";
     showCenter("empty");
     return;
   }
+
+  const hasProj = state.hasProjection(layer);
+  if (!hasProj && state.viewMode === "projection") state.viewMode = "primary";
+  el.toolbar.style.display = "flex";
+  el.tabPrimary.textContent = layer.kind === "graph" ? "Graph" : layer.kind === "table" ? "Table" : "Note";
+  el.tabPrimary.classList.toggle("active", state.viewMode === "primary");
+  el.tabProjection.classList.toggle("active", state.viewMode === "projection");
+  el.projLegend.style.display = state.viewMode === "projection" ? "inline" : "none";
+  if (hasProj) el.tabProjection.removeAttribute("disabled");
+  else el.tabProjection.setAttribute("disabled", "");
+
+  if (state.viewMode === "projection" && hasProj) {
+    showCenter("projection");
+    projectionHandle = renderProjection(el.projection, state, layer, (nodeId) => {
+      selectedNodeId = nodeId;
+      renderRight();
+      if (projectionHandle) {
+        projectionHandle.cy.$(".highlight").removeClass("highlight");
+        if (nodeId) projectionHandle.cy.nodes(`[realId = "${nodeId}"]`).addClass("highlight");
+      }
+    });
+    return;
+  }
+
   if (layer.kind === "graph") {
     showCenter("cy");
     graphHandle = renderGraph(el.cy, layer, (nodeId) => {

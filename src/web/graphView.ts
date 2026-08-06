@@ -40,7 +40,10 @@ export function renderGraph(
       .map((e, i) => ({ data: { id: `e${i}`, source: e.src, target: e.dst, label: e.type ?? "" } })),
   ];
 
-  const big = layer.nodes.length > 250;
+  // dagre gives clean hierarchy for small/tree-like graphs, but collapses wide
+  // bipartite/hub graphs into a thin column — use force-directed above a
+  // modest node count so those spread out in 2D.
+  const big = layer.nodes.length > 30;
 
   const cy = cytoscape({
     container,
@@ -77,8 +80,17 @@ export function renderGraph(
       { selector: ".highlight", style: { "background-color": "#fff", "border-width": 2, "border-color": "#6ea8fe" } },
     ],
     layout: big
-      ? { name: "concentric", concentric: (n: cytoscape.NodeSingular) => n.degree(false), levelWidth: () => 4 }
-      : { name: "dagre", rankDir: "LR", nodeSep: 18, rankSep: 60 } as cytoscape.LayoutOptions,
+      ? ({
+          name: "cose",
+          idealEdgeLength: () => 90,
+          nodeRepulsion: () => 12000,
+          nodeOverlap: 12,
+          gravity: 0.3,
+          componentSpacing: 90,
+          animate: false,
+          randomize: true,
+        } as unknown as cytoscape.LayoutOptions)
+      : ({ name: "dagre", rankDir: "LR", nodeSep: 22, rankSep: 80 } as cytoscape.LayoutOptions),
     wheelSensitivity: 0.2,
   });
 
