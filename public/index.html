@@ -113,6 +113,33 @@
     .callout { background: rgba(240,97,109,.12); border: 1px solid #f0616d; color: #f4a6ad;
       border-radius: 6px; padding: 6px 10px; margin-bottom: 10px; font-size: 12px; }
     .loc { font-family: ui-monospace, monospace; font-size: 11px; color: var(--muted); font-weight: 400; }
+    /* Navigation: back/forward + breadcrumb trail so drilling keeps its context */
+    #navbar { display: flex; align-items: center; gap: 6px; padding: 5px 10px;
+      border-bottom: 1px solid var(--border); background: var(--panel); min-height: 32px; }
+    .nav-btn { font-size: 13px; line-height: 1; width: 24px; height: 22px; border-radius: 5px;
+      border: 1px solid var(--border); background: var(--panel-2); color: var(--text); cursor: pointer; }
+    .nav-btn:hover:not(:disabled) { border-color: var(--accent); }
+    .nav-btn:disabled { opacity: .35; cursor: default; }
+    #breadcrumb { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; overflow: hidden; }
+    .crumb { font-size: 11px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      padding: 2px 8px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2);
+      color: var(--muted); cursor: pointer; }
+    .crumb:hover { border-color: var(--accent); color: var(--text); }
+    .crumb.current { color: var(--text); border-color: var(--accent); background: var(--accent-dim); cursor: default; }
+    .crumb-via { font-size: 9px; color: var(--muted); opacity: .7; margin: 0 1px; }
+    .crumb-via::before { content: "\2192 "; }
+    .crumb-hint { font-size: 11px; color: var(--muted); font-style: italic; }
+    /* Provenance: badges + dashed/dotted connector samples in the legend */
+    .origin-badge { font-size: 9px; text-transform: uppercase; letter-spacing: .4px; padding: 1px 5px;
+      border-radius: 8px; font-weight: 700; }
+    .origin-badge.origin-llm { background: rgba(200,143,251,.2); border: 1px solid #c88ffb; color: #d9b6fc; }
+    .origin-badge.origin-manual { background: rgba(224,185,120,.2); border: 1px solid #e0b978; color: #e9cd97; }
+    .lg-origin { width: 16px; height: 0; display: inline-block; vertical-align: middle; }
+    .lg-origin-solid { border-top: 2px solid var(--muted); }
+    .lg-origin-dashed { border-top: 2px dashed #c88ffb; }
+    .lg-origin-dotted { border-top: 2px dotted #e0b978; }
+    .chip.fact { border-color: var(--accent-dim); }
+    .chip.fact.missing { opacity: .5; cursor: default; text-decoration: line-through; }
     a { color: var(--accent); }
   </style>
 </head>
@@ -131,6 +158,11 @@
     <div id="layerList"></div>
   </aside>
   <main id="center">
+    <div id="navbar">
+      <button id="navBack" class="nav-btn" title="Back (Alt+Left)" disabled>&#8592;</button>
+      <button id="navForward" class="nav-btn" title="Forward (Alt+Right)" disabled>&#8594;</button>
+      <div id="breadcrumb"><span class="crumb-hint">nothing selected</span></div>
+    </div>
     <div id="centerToolbar">
       <span class="tab" id="tabPrimary">Layer</span>
       <span class="tab" id="tabProjection">Projection</span>

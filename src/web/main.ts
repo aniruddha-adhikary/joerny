@@ -8,7 +8,6 @@ import { renderInspector } from "./inspector.js";
 import { legendHtml, kindLegendHtml } from "./legend.js";
 
 const state = new AppState();
-let selectedNodeId: string | null = null;
 let graphHandle: GraphViewHandle | null = null;
 let projectionHandle: ProjectionHandle | null = null;
 
@@ -30,6 +29,10 @@ const el = {
   projection: document.getElementById("projection") as HTMLElement,
   legend: document.getElementById("legend") as HTMLElement,
   kindLegend: document.getElementById("kindLegend") as HTMLElement,
+  nav: document.getElementById("navbar") as HTMLElement,
+  navBack: document.getElementById("navBack") as HTMLButtonElement,
+  navForward: document.getElementById("navForward") as HTMLButtonElement,
+  breadcrumb: document.getElementById("breadcrumb") as HTMLElement,
 };
 
 el.kindLegend.innerHTML = kindLegendHtml();
@@ -40,8 +43,30 @@ el.tabProjection.addEventListener("click", () => {
   setViewMode("projection");
 });
 
+el.navBack.addEventListener("click", () => {
+  state.back();
+  renderAll();
+});
+el.navForward.addEventListener("click", () => {
+  state.forward();
+  renderAll();
+});
+// Browser-style keyboard nav (Alt+←/→) so back/forward feels native.
+window.addEventListener("keydown", (ev) => {
+  if (ev.altKey && ev.key === "ArrowLeft") {
+    ev.preventDefault();
+    state.back();
+    renderAll();
+  } else if (ev.altKey && ev.key === "ArrowRight") {
+    ev.preventDefault();
+    state.forward();
+    renderAll();
+  }
+});
+
 function setViewMode(mode: "primary" | "projection"): void {
-  state.viewMode = mode;
+  state.setViewMode(mode);
+  renderNav();
   renderCenter();
 }
 
@@ -51,9 +76,10 @@ function escapeHtml(s: string): string {
   );
 }
 
-function selectLayer(id: string | null, resetNode = true): void {
-  state.selectedLayerId = id;
-  if (resetNode) selectedNodeId = null;
+/** Every layer/node navigation goes through here so it lands on the history
+ *  trail and the breadcrumb + back/forward stay in sync. */
+function go(layerId: string, opts: { nodeId?: string | null; viewMode?: "primary" | "projection"; via?: string } = {}): void {
+  state.navigate(layerId, opts);
   renderAll();
 }
 
@@ -66,9 +92,43 @@ function renderLayerList(): void {
     item.innerHTML = `<span class="kind-badge kind-${layer.kind}">${layer.kind[0]}</span><span class="name">${escapeHtml(
       layer.name,
     )}</span>`;
-    item.addEventListener("click", () => selectLayer(layer.id));
+    item.addEventListener("click", () => go(layer.id, { via: "layer list" }));
     el.layerList.appendChild(item);
   }
+}
+
+/** The back/forward controls + the breadcrumb trail of where you've been, so a
+ *  drill into a projection/other layer keeps its context and is one click to undo. */
+function renderNav(): void {
+  el.navBack.disabled = !state.canBack();
+  el.navForward.disabled = !state.canForward();
+
+  if (state.histIndex < 0) {
+    el.breadcrumb.innerHTML = `<span class="crumb-hint">nothing selected</span>`;
+    return;
+  }
+  const crumbs: string[] = [];
+  for (let i = 0; i <= state.histIndex; i += 1) {
+    const e = state.history[i];
+    const layer = state.layers.get(e.layerId);
+    if (!layer) continue;
+    let label = layer.name;
+    if (e.nodeId && layer.kind === "graph") {
+      const node = layer.nodes.find((n) => n.id === e.nodeId);
+      if (node) label += ` › ${node.label}`;
+    }
+    if (e.viewMode === "projection") label += ` (projection)`;
+    if (i > 0) crumbs.push(`<span class="crumb-via">${escapeHtml(state.history[i].via)}</span>`);
+    const cls = i === state.histIndex ? "crumb current" : "crumb";
+    crumbs.push(`<button class="${cls}" data-idx="${i}" title="${escapeHtml(label)}">${escapeHtml(label)}</button>`);
+  }
+  el.breadcrumb.innerHTML = crumbs.join("");
+  el.breadcrumb.querySelectorAll<HTMLElement>(".crumb[data-idx]").forEach((c) => {
+    c.addEventListener("click", () => {
+      state.jumpTo(Number(c.dataset.idx));
+      renderAll();
+    });
+  });
 }
 
 function showCenter(which: "empty" | "cy" | "table" | "note" | "projection"): void {
@@ -108,8 +168,9 @@ function renderCenter(): void {
   if (state.viewMode === "projection" && hasProj) {
     showCenter("projection");
     projectionHandle = renderProjection(el.projection, state, layer, (nodeId) => {
-      selectedNodeId = nodeId;
+      state.focusNode(nodeId);
       renderRight();
+      renderNav();
       if (projectionHandle) {
         projectionHandle.cy.$(".highlight").removeClass("highlight");
         if (nodeId) projectionHandle.cy.nodes(`[realId = "${nodeId}"]`).addClass("highlight");
@@ -121,8 +182,9 @@ function renderCenter(): void {
   if (layer.kind === "graph") {
     showCenter("cy");
     graphHandle = renderGraph(el.cy, layer, (nodeId) => {
-      selectedNodeId = nodeId;
+      state.focusNode(nodeId);
       renderRight();
+      renderNav();
       if (graphHandle) {
         graphHandle.cy.$(".highlight").removeClass("highlight");
         if (nodeId) graphHandle.cy.$id(nodeId).addClass("highlight");
@@ -150,21 +212,20 @@ function renderRight(): void {
   }
   el.rightEmpty.style.display = "none";
   el.inspector.style.display = "block";
-  renderInspector(el.inspector, state, layer, selectedNodeId, (id) => selectLayer(id));
+  renderInspector(el.inspector, state, layer, state.selectedNodeId, (layerId, opts) =>
+    go(layerId, opts),
+  );
 }
 
 function renderAll(): void {
+  renderNav();
   renderLayerList();
   renderLineage(
     el.lineage,
     state.ordered(),
     state.selectedLayerId,
-    (id) => selectLayer(id),
-    (childId) => {
-      selectLayer(childId);
-      state.viewMode = "projection";
-      renderCenter();
-    },
+    (id) => go(id, { via: "lineage" }),
+    (childId) => go(childId, { viewMode: "projection", via: "projection" }),
   );
   renderCenter();
   renderRight();
@@ -192,16 +253,18 @@ function connect(): void {
       el.sessionLabel.textContent = `session: ${msg.session}`;
       for (const layer of msg.layers) state.upsert(layer);
       if (!state.selectedLayerId && msg.layers.length) {
-        state.selectedLayerId = state.ordered()[state.ordered().length - 1].id;
+        state.navigate(state.ordered()[state.ordered().length - 1].id, { via: "latest" });
       }
       renderAll();
     } else if (msg.type === "layer-upserted") {
       const isNew = !state.layers.has(msg.layer.id);
+      // Follow live emissions only when parked at the newest stop; if the user
+      // has navigated back to inspect something, don't yank them away (and don't
+      // wipe their forward history).
+      const following = !state.canForward();
       state.upsert(msg.layer);
-      // Highlight the latest emission by auto-selecting new layers.
-      if (isNew) {
-        state.selectedLayerId = msg.layer.id;
-        selectedNodeId = null;
+      if (isNew && (following || state.histIndex < 0)) {
+        state.navigate(msg.layer.id, { via: "latest" });
       }
       renderAll();
     } else if (msg.type === "layer-removed") {

@@ -31,8 +31,20 @@ import java.time.Instant
 object joerny {
 
   final case class Node(id: String, label: String = null, `type`: String = null, props: Map[String, Any] = Map.empty)
-  final case class Edge(src: String, dst: String, `type`: String = null, props: Map[String, Any] = Map.empty)
-  final case class Mapping(from: String, to: String, evidence: String = null)
+  // `origin` records how a connection came to exist: "mechanical" (computed from
+  // the CPG — the default and the honest one), "llm" (inferred/inserted by a
+  // model — an artificial link), or "manual" (hand-authored). The viewer renders
+  // non-mechanical connections distinctly so guesses are never mistaken for facts.
+  final case class Edge(src: String, dst: String, `type`: String = null, props: Map[String, Any] = Map.empty,
+                        origin: String = "mechanical")
+  final case class Mapping(from: String, to: String, evidence: String = null, origin: String = "mechanical")
+
+  /** Mark an edge as LLM-inferred (rendered dashed): a link a model proposed, not one the CPG proves. */
+  def llmEdge(src: String, dst: String, `type`: String = null, props: Map[String, Any] = Map.empty): Edge =
+    Edge(src, dst, `type`, props, "llm")
+  /** Mark a mapping as LLM-inferred (rendered dashed). */
+  def llmMapping(from: String, to: String, evidence: String = null): Mapping =
+    Mapping(from, to, evidence, "llm")
 
   /** The computed result of a projection primitive: target nodes, optional edges,
    *  the provenance-carrying mappings (source node -> target node, `evidence` = why),
@@ -107,11 +119,17 @@ object joerny {
     fields.mkString("{", ",", "}")
   }
 
+  // Absence of `origin` means "mechanical", so only serialize the non-default
+  // (artificial) provenance to keep layers compact and back-compatible.
+  private def optOrigin(v: String): Option[String] =
+    Option(v).filter(o => o.nonEmpty && o != "mechanical").map(o => field("origin", jsonVal(o)))
+
   private def edgeJson(e: Edge): String = {
     val fields = List(
       Some(field("src", jsonVal(e.src))),
       Some(field("dst", jsonVal(e.dst))),
       optStr("type", e.`type`),
+      optOrigin(e.origin),
       if (e.props.nonEmpty) Some(field("props", jsonVal(e.props))) else None
     ).flatten
     fields.mkString("{", ",", "}")
@@ -121,7 +139,8 @@ object joerny {
     val fields = List(
       Some(field("from", jsonVal(m.from))),
       Some(field("to", jsonVal(m.to))),
-      optStr("evidence", m.evidence)
+      optStr("evidence", m.evidence),
+      optOrigin(m.origin)
     ).flatten
     fields.mkString("{", ",", "}")
   }

@@ -84,11 +84,34 @@ const layers = [
     ],
     edges: [],
     mappings: [
-      { from: "job.Job1", to: "cmp.sftp-ingest", evidence: "config only" },
-      { from: "job.Job2", to: "cmp.sftp-ingest" },
-      { from: "job.Job5", to: "cmp.sftp-ingest" },
-      { from: "job.Job6", to: "cmp.mq-dispatch" },
-      { from: "job.Job10", to: "cmp.report-mail" },
+      { from: "job.Job1", to: "cmp.sftp-ingest", evidence: "shared call-tree fingerprint" },
+      { from: "job.Job2", to: "cmp.sftp-ingest", evidence: "shared call-tree fingerprint" },
+      // An LLM guess (no mechanical fingerprint match) — rendered dashed + badged.
+      { from: "job.Job5", to: "cmp.sftp-ingest", evidence: "name resembles ingest job", origin: "llm" },
+      { from: "job.Job6", to: "cmp.mq-dispatch", evidence: "shared call-tree fingerprint" },
+      { from: "job.Job10", to: "cmp.report-mail", evidence: "shared call-tree fingerprint" },
+    ],
+  },
+  {
+    id: "requirements",
+    name: "Requirements",
+    kind: "graph",
+    derivedFrom: ["fan-in-infra", "components"],
+    narration:
+      "Requirements compiled from facts; each cites the fact it came from (click a fact in the inspector to trace back). Solid cites = mechanical; dashed = LLM-inferred.",
+    createdAt: now(),
+    nodes: [
+      { id: "REQ-1", label: "REQ-1", type: "requirement", props: { requirement: "The system SHALL upload files via SFTP.", status: "SUPPORTED", gate: "all citations resolve", cites: "cap:SFTP" } },
+      { id: "REQ-2", label: "REQ-2", type: "req-unverified", props: { requirement: "The system SHALL notify via EMAIL to CLIENTS.", status: "UNVERIFIED", gate: "token not in cited evidence: CLIENTS", cites: "cap:EMAIL" } },
+      { id: "cap:SFTP", label: "capability: SFTP", type: "fact-capability", props: { detail: "SftpClient.upload → com.jcraft.jsch", source: "sdk/SftpClient.java", loc: "sdk/SftpClient.java:22" } },
+      { id: "cap:EMAIL", label: "capability: EMAIL", type: "fact-capability", props: { detail: "Mailer.sendEmail → javax.mail", source: "sdk/Mailer.java", loc: "sdk/Mailer.java:14" } },
+    ],
+    edges: [
+      { src: "REQ-1", dst: "cap:SFTP", type: "cites" },
+      { src: "REQ-2", dst: "cap:EMAIL", type: "cites", origin: "llm" },
+    ],
+    mappings: [
+      { from: "sdk.SftpClient.upload", to: "cap:SFTP", evidence: "receiver type com.jcraft.jsch" },
     ],
   },
   {

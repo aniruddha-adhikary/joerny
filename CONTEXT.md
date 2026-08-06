@@ -42,6 +42,10 @@ _Avoid_: edge (reserved for within-layer Graph edges), link, projection edge, no
 The proof carried by a Mapping: *why* this source node maps to this target node (the shared fingerprint key, the matched marker literal, the shared table…). Weak or absent Evidence must be reported, never fabricated.
 _Avoid_: note, reason, comment, provenance-string
 
+**Origin**:
+*How a connection came to exist* — the provenance of a Graph edge or a Mapping. Exactly one of `mechanical` (computed from the CPG or a deterministic rule — authoritative, the honest default), `llm` (inferred or inserted by a language model — an artificial link, not ground truth), or `manual` (hand-authored by a human). Absent = `mechanical`. The viewer renders non-mechanical connections distinctly (solid = mechanical, dashed = llm, dotted = manual) so a guess is never mistaken for a fact. Distinct from **Evidence**: Evidence is *why* a link holds; Origin is *who/what* asserted it.
+_Avoid_: source (reserved for a node's `file:line`), type, kind, confidence
+
 **Projection**:
 The computed bundle a `derive.*` primitive produces from a parent Layer: derived nodes/edges + the Mappings (with Evidence) that connect them back to the source. Merged into a Layer with `.project(...)`. The viewer's *Projection view* renders a Layer's Mappings.
 _Avoid_: transformation, mapping set, derivation output
