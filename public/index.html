@@ -120,7 +120,10 @@
       border: 1px solid var(--border); background: var(--panel-2); color: var(--text); cursor: pointer; }
     .nav-btn:hover:not(:disabled) { border-color: var(--accent); }
     .nav-btn:disabled { opacity: .35; cursor: default; }
-    #breadcrumb { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; overflow: hidden; }
+    #breadcrumb { display: flex; align-items: center; gap: 3px; flex: 1; min-width: 0;
+      flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+    #breadcrumb::-webkit-scrollbar { display: none; }
+    #breadcrumb .crumb, #breadcrumb .crumb-via { flex: 0 0 auto; }
     .crumb { font-size: 11px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
       padding: 2px 8px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2);
       color: var(--muted); cursor: pointer; }

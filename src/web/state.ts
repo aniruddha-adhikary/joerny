@@ -32,17 +32,30 @@ export class AppState {
   /** Navigate to a layer (optionally focusing a node / view), pushing a new
    *  history entry and discarding any forward entries — exactly like a browser.
    *  Consecutive navigations to the identical spot are collapsed. */
-  navigate(layerId: string, opts: { nodeId?: string | null; viewMode?: ViewMode; via?: string } = {}): void {
+  navigate(
+    layerId: string,
+    opts: { nodeId?: string | null; viewMode?: ViewMode; via?: string; replace?: boolean } = {},
+  ): void {
     const nodeId = opts.nodeId ?? null;
     const viewMode = opts.viewMode ?? "primary";
+    const via = opts.via ?? "select";
     const cur = this.current();
     if (cur && cur.layerId === layerId && cur.nodeId === nodeId && cur.viewMode === viewMode) {
       this.selectedNodeId = nodeId;
       this.viewMode = viewMode;
       return;
     }
+    // Replace the current stop instead of pushing (used when auto-following live
+    // emissions so a burst of new layers collapses into a single "latest" crumb
+    // rather than spamming the trail).
+    if (opts.replace && this.histIndex >= 0) {
+      this.history = this.history.slice(0, this.histIndex + 1);
+      this.history[this.histIndex] = { layerId, nodeId, viewMode, via };
+      this.applyCurrent();
+      return;
+    }
     this.history = this.history.slice(0, this.histIndex + 1);
-    this.history.push({ layerId, nodeId, viewMode, via: opts.via ?? "select" });
+    this.history.push({ layerId, nodeId, viewMode, via });
     this.histIndex = this.history.length - 1;
     this.applyCurrent();
   }

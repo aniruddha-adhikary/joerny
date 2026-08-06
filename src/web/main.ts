@@ -129,6 +129,8 @@ function renderNav(): void {
       renderAll();
     });
   });
+  // Keep the current (rightmost) crumb in view when the trail overflows.
+  el.breadcrumb.scrollLeft = el.breadcrumb.scrollWidth;
 }
 
 function showCenter(which: "empty" | "cy" | "table" | "note" | "projection"): void {
@@ -264,7 +266,11 @@ function connect(): void {
       const following = !state.canForward();
       state.upsert(msg.layer);
       if (isNew && (following || state.histIndex < 0)) {
-        state.navigate(msg.layer.id, { via: "latest" });
+        // Collapse a burst of auto-followed layers into one trailing "latest"
+        // crumb: replace the current stop if it was itself an auto-follow, so
+        // streaming N layers doesn't push N crumbs. An explicit stop is kept.
+        const replace = state.current()?.via === "latest";
+        state.navigate(msg.layer.id, { via: "latest", replace });
       }
       renderAll();
     } else if (msg.type === "layer-removed") {
