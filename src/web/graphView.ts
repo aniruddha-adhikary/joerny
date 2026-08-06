@@ -53,40 +53,53 @@ export function renderGraph(
         selector: "node",
         style: {
           "background-color": "data(color)",
-          label: "data(label)",
+          // On dense graphs, labels are hidden by default and revealed on
+          // hover/selection (see `.lbl`) so the view isn't a wall of text.
+          label: big ? "" : "data(label)",
           color: "#e6e9ef",
           "font-size": 10,
           "text-valign": "center",
           "text-halign": "right",
           "text-margin-x": 4,
-          "text-max-width": "160px",
+          "text-max-width": "200px",
           "text-wrap": "ellipsis",
-          width: 14,
-          height: 14,
+          "text-outline-color": "#0f1115",
+          "text-outline-width": big ? 2 : 0,
+          // Size hubs by degree on big graphs so structure reads at a glance.
+          width: big ? ((ele: cytoscape.NodeSingular) => 10 + Math.min(ele.degree(false), 22)) : 14,
+          height: big ? ((ele: cytoscape.NodeSingular) => 10 + Math.min(ele.degree(false), 22)) : 14,
         },
       },
       {
         selector: "edge",
         style: {
           width: 1,
-          "line-color": "#3a4152",
-          "target-arrow-color": "#3a4152",
+          // Repeated edge labels are pure noise on dense graphs.
+          label: big ? "" : "data(label)",
+          "font-size": 8,
+          color: "#8b93a7",
+          "line-color": "#333a49",
+          "target-arrow-color": "#333a49",
           "target-arrow-shape": "triangle",
           "curve-style": "bezier",
-          "arrow-scale": 0.8,
+          "arrow-scale": 0.7,
+          opacity: big ? 0.4 : 0.9,
         },
       },
+      { selector: "node.lbl", style: { label: "data(label)", "z-index": 20, "font-size": 11 } },
+      { selector: ".faded", style: { opacity: 0.08 } },
+      { selector: "edge.lit", style: { "line-color": "#6ea8fe", "target-arrow-color": "#6ea8fe", opacity: 0.95, width: 1.6 } },
       { selector: "node:selected", style: { "background-color": "#fff", "border-width": 2, "border-color": "#6ea8fe" } },
       { selector: ".highlight", style: { "background-color": "#fff", "border-width": 2, "border-color": "#6ea8fe" } },
     ],
     layout: big
       ? ({
           name: "cose",
-          idealEdgeLength: () => 90,
-          nodeRepulsion: () => 12000,
-          nodeOverlap: 12,
-          gravity: 0.3,
-          componentSpacing: 90,
+          idealEdgeLength: () => 130,
+          nodeRepulsion: () => 20000,
+          nodeOverlap: 20,
+          gravity: 0.25,
+          componentSpacing: 120,
           animate: false,
           randomize: true,
         } as unknown as cytoscape.LayoutOptions)
@@ -94,9 +107,41 @@ export function renderGraph(
     wheelSensitivity: 0.2,
   });
 
-  cy.on("tap", "node", (evt: EventObject) => onSelect(evt.target.id()));
+  // Hover-to-focus on dense graphs: dim everything, light up the hovered node
+  // and its immediate neighborhood, and reveal just those labels.
+  const clearFocus = (): void => {
+    cy.elements().removeClass("faded lit");
+    cy.nodes(":unselected").removeClass("lbl");
+  };
+  const focus = (node: cytoscape.NodeSingular): void => {
+    const hood = node.closedNeighborhood();
+    cy.elements().addClass("faded");
+    hood.removeClass("faded");
+    hood.nodes().addClass("lbl");
+    node.connectedEdges().removeClass("faded").addClass("lit");
+  };
+  if (big) {
+    cy.on("mouseover", "node", (evt: EventObject) => focus(evt.target as cytoscape.NodeSingular));
+    cy.on("mouseout", "node", () => {
+      clearFocus();
+      cy.nodes(":selected").forEach((n: cytoscape.NodeSingular) => focus(n));
+    });
+  }
+
+  cy.on("tap", "node", (evt: EventObject) => {
+    const node = evt.target as cytoscape.NodeSingular;
+    if (big) {
+      clearFocus();
+      focus(node);
+      node.addClass("lbl");
+    }
+    onSelect(node.id());
+  });
   cy.on("tap", (evt: EventObject) => {
-    if (evt.target === cy) onSelect(null);
+    if (evt.target === cy) {
+      if (big) clearFocus();
+      onSelect(null);
+    }
   });
 
   return { cy, destroy: () => cy.destroy() };
