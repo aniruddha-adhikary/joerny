@@ -305,26 +305,42 @@ object joerny {
 
     final case class BipartiteResult(incidence: Projection, coupling: Projection, clusters: Projection)
 
+    /** #3 with no backboning (every shared right counts). */
+    def bipartite(pairs: Iterable[(String, String)], minShared: Int): BipartiteResult =
+      bipartite(pairs, minShared, maxHubShare = 1.0)
+
     /** #3 Bipartite projection: from a two-mode `(left, right)` incidence relation, derive
      *  left↔left coupling (two lefts linked when they share >= `minShared` rights, shared
      *  rights recorded as provenance) and the connected-component clusters over it. Returns
-     *  the raw incidence, the coupling graph, and the clusters — pick whichever to emit. */
-    def bipartite(pairs: Iterable[(String, String)], minShared: Int): BipartiteResult = {
+     *  the raw incidence, the coupling graph, and the clusters — pick whichever to emit.
+     *
+     *  Backboning: a right-node touched by more than `maxHubShare` of the lefts (a ubiquitous
+     *  table like AUDIT_LOG) couples almost everything and collapses the graph into one blob,
+     *  so such hubs are dropped from the coupling computation (still present in `incidence`).
+     *  Pass `maxHubShare = 1.0` to keep every right. Combined with `minShared >= 2` this is
+     *  what separates dense projections into meaningful clusters. */
+    def bipartite(pairs: Iterable[(String, String)], minShared: Int, maxHubShare: Double): BipartiteResult = {
       val byLeft: Map[String, Set[String]] = pairs.groupBy(_._1).map { case (l, ps) => l -> ps.map(_._2).toSet }
       val lefts = byLeft.keys.toVector.sorted
+      // right-node frequency → hubs are those above the share threshold.
+      val rightFreq: Map[String, Int] = pairs.groupBy(_._2).map { case (r, ps) => r -> ps.map(_._1).toSet.size }
+      val hubs: Set[String] = rightFreq.collect { case (r, f) if f.toDouble / lefts.size > maxHubShare => r }.toSet
+      val effLeft: Map[String, Set[String]] = byLeft.map { case (l, rs) => l -> (rs -- hubs) }
       val couplingEdges = scala.collection.mutable.ListBuffer.empty[Edge]
       var i = 0
       while (i < lefts.size) {
         var j = i + 1
         while (j < lefts.size) {
           val a = lefts(i); val b = lefts(j)
-          val shared = byLeft(a).intersect(byLeft(b))
+          val shared = effLeft(a).intersect(effLeft(b))
           if (shared.size >= minShared)
             couplingEdges += Edge(a, b, "shares", Map("count" -> shared.size, "via" -> shared.toList.sorted.mkString(", ")))
           j += 1
         }
         i += 1
       }
+      // connectedComponents seeds from all lefts, so lefts with no surviving
+      // coupling edge each form their own singleton cluster.
       val comps = connectedComponents(lefts.toSet, couplingEdges.map(e => (e.src, e.dst)))
       val cms = scala.collection.mutable.ListBuffer.empty[Mapping]
       val clusterNodes = comps.zipWithIndex.map { case (members, k) =>
@@ -338,8 +354,9 @@ object joerny {
         coupling = Projection(
           nodes = lefts.toList.map(l => Node(l, l.split('.').last, "node")),
           edges = couplingEdges.toList,
-          stats = Map("edges" -> couplingEdges.size, "minShared" -> minShared)),
-        clusters = Projection(nodes = clusterNodes, mappings = cms.toList, stats = Map("clusters" -> comps.size))
+          stats = Map("edges" -> couplingEdges.size, "minShared" -> minShared, "hubsDropped" -> hubs.size)),
+        clusters = Projection(nodes = clusterNodes, mappings = cms.toList,
+          stats = Map("clusters" -> comps.size, "hubsDropped" -> hubs.toList.sorted.mkString(",")))
       )
     }
 

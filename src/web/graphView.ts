@@ -1,10 +1,21 @@
 import cytoscape, { type Core, type EventObject } from "cytoscape";
 import dagre from "cytoscape-dagre";
 import type { GraphLayer } from "../shared/layer.js";
+import { measure, present } from "./viewHeuristics.js";
 
 cytoscape.use(dagre);
 
 const TYPE_COLORS = ["#6ea8fe", "#7ed6a5", "#e0b978", "#c88ffb", "#f28ca4", "#63cbd0", "#b0bac9"];
+
+// Semantic edge colours so relationship kind reads without any text label.
+const EDGE_COLORS: Record<string, string> = {
+  read: "#7ed6a5",
+  write: "#e0879a",
+  calls: "#3a4252",
+  then: "#6ea8fe",
+  uses: "#63cbd0",
+};
+const EDGE_DEFAULT = "#3a4252";
 
 function colorForType(type: string | undefined, palette: Map<string, string>): string {
   const key = type ?? "_";
@@ -18,9 +29,11 @@ export interface GraphViewHandle {
 }
 
 /**
- * Renders a graph layer into `container` with a dagre (hierarchical) layout,
- * falling back to a force-ish layout when the graph is large. Calls `onSelect`
- * with the node id when a node is tapped.
+ * Renders a graph layer. Presentation (layout, whether labels/edge-labels show,
+ * node sizing, edge dimming) is derived from the graph's measured *shape* via
+ * `viewHeuristics`, not fixed thresholds — a small sketch stays fully labelled,
+ * a hairball declutters and reveals detail on hover. Calls `onSelect` with the
+ * node id when a node is tapped.
  */
 export function renderGraph(
   container: HTMLElement,
@@ -29,21 +42,28 @@ export function renderGraph(
 ): GraphViewHandle {
   const palette = new Map<string, string>();
   const nodeIds = new Set(layer.nodes.map((n) => n.id));
+  const edges = layer.edges.filter((e) => nodeIds.has(e.src) && nodeIds.has(e.dst));
+
+  const p = present(measure(layer.nodes.length, edges.map((e) => ({ source: e.src, target: e.dst }))));
+  const hideNodeLabels = p.nodeLabels === "hover";
+  const hideEdgeLabels = p.edgeLabels === "hover";
 
   const elements: cytoscape.ElementDefinition[] = [
     ...layer.nodes.map((n) => ({
       data: { id: n.id, label: n.label, type: n.type ?? "", color: colorForType(n.type, palette) },
     })),
-    // Only keep edges whose endpoints exist to avoid cytoscape errors.
-    ...layer.edges
-      .filter((e) => nodeIds.has(e.src) && nodeIds.has(e.dst))
-      .map((e, i) => ({ data: { id: `e${i}`, source: e.src, target: e.dst, label: e.type ?? "" } })),
+    ...edges.map((e, i) => ({
+      data: {
+        id: `e${i}`,
+        source: e.src,
+        target: e.dst,
+        label: e.type ?? "",
+        color: EDGE_COLORS[e.type ?? ""] ?? EDGE_DEFAULT,
+      },
+    })),
   ];
 
-  // dagre gives clean hierarchy for small/tree-like graphs, but collapses wide
-  // bipartite/hub graphs into a thin column — use force-directed above a
-  // modest node count so those spread out in 2D.
-  const big = layer.nodes.length > 30;
+  const degSize = (ele: cytoscape.NodeSingular): number => 12 + Math.min(ele.degree(false) * 1.5, 28);
 
   const cy = cytoscape({
     container,
@@ -53,62 +73,56 @@ export function renderGraph(
         selector: "node",
         style: {
           "background-color": "data(color)",
-          // On dense graphs, labels are hidden by default and revealed on
-          // hover/selection (see `.lbl`) so the view isn't a wall of text.
-          label: big ? "" : "data(label)",
+          label: hideNodeLabels ? "" : "data(label)",
           color: "#e6e9ef",
-          "font-size": 10,
+          "font-size": p.fontSize,
           "text-valign": "center",
           "text-halign": "right",
-          "text-margin-x": 4,
-          "text-max-width": "200px",
+          "text-margin-x": 5,
+          "text-max-width": "160px",
           "text-wrap": "ellipsis",
           "text-outline-color": "#0f1115",
-          "text-outline-width": big ? 2 : 0,
-          // Size hubs by degree on big graphs so structure reads at a glance.
-          width: big ? ((ele: cytoscape.NodeSingular) => 10 + Math.min(ele.degree(false), 22)) : 14,
-          height: big ? ((ele: cytoscape.NodeSingular) => 10 + Math.min(ele.degree(false), 22)) : 14,
+          "text-outline-width": 2,
+          width: p.sizeByDegree ? degSize : 16,
+          height: p.sizeByDegree ? degSize : 16,
+          "border-width": 0,
         },
       },
       {
         selector: "edge",
         style: {
-          width: 1,
-          // Repeated edge labels are pure noise on dense graphs.
-          label: big ? "" : "data(label)",
-          "font-size": 8,
-          color: "#8b93a7",
-          "line-color": "#333a49",
-          "target-arrow-color": "#333a49",
+          width: 1.2,
+          // Kind is shown via colour; text is revealed for a focused node's
+          // incident edges (.lit) unless the graph is small enough to show all.
+          label: hideEdgeLabels ? "" : "data(label)",
+          "font-size": Math.max(p.fontSize - 2, 8),
+          color: "#c7cdda",
+          "text-outline-color": "#0f1115",
+          "text-outline-width": 2,
+          "line-color": "data(color)",
+          "target-arrow-color": "data(color)",
           "target-arrow-shape": "triangle",
           "curve-style": "bezier",
-          "arrow-scale": 0.7,
-          opacity: big ? 0.4 : 0.9,
+          "arrow-scale": 0.8,
+          opacity: p.edgeOpacity,
         },
       },
-      { selector: "node.lbl", style: { label: "data(label)", "z-index": 20, "font-size": 11 } },
-      { selector: ".faded", style: { opacity: 0.08 } },
-      { selector: "edge.lit", style: { "line-color": "#6ea8fe", "target-arrow-color": "#6ea8fe", opacity: 0.95, width: 1.6 } },
+      { selector: "node.lbl", style: { label: "data(label)", "z-index": 20, "font-size": p.fontSize + 1 } },
+      { selector: ".faded", style: { opacity: 0.06 } },
+      {
+        selector: "edge.lit",
+        style: { "line-color": "#6ea8fe", "target-arrow-color": "#6ea8fe", opacity: 1, width: 2, label: "data(label)", "z-index": 21 },
+      },
       { selector: "node:selected", style: { "background-color": "#fff", "border-width": 2, "border-color": "#6ea8fe" } },
       { selector: ".highlight", style: { "background-color": "#fff", "border-width": 2, "border-color": "#6ea8fe" } },
     ],
-    layout: big
-      ? ({
-          name: "cose",
-          idealEdgeLength: () => 130,
-          nodeRepulsion: () => 20000,
-          nodeOverlap: 20,
-          gravity: 0.25,
-          componentSpacing: 120,
-          animate: false,
-          randomize: true,
-        } as unknown as cytoscape.LayoutOptions)
-      : ({ name: "dagre", rankDir: "LR", nodeSep: 22, rankSep: 80 } as cytoscape.LayoutOptions),
+    layout: p.layout,
     wheelSensitivity: 0.2,
   });
 
-  // Hover-to-focus on dense graphs: dim everything, light up the hovered node
-  // and its immediate neighborhood, and reveal just those labels.
+  // Hover-to-focus: dim everything, light up the hovered node + neighbourhood
+  // and reveal just those labels + incident edge labels. Always available so
+  // even a labelled small graph can surface an edge's note on demand.
   const clearFocus = (): void => {
     cy.elements().removeClass("faded lit");
     cy.nodes(":unselected").removeClass("lbl");
@@ -120,26 +134,23 @@ export function renderGraph(
     hood.nodes().addClass("lbl");
     node.connectedEdges().removeClass("faded").addClass("lit");
   };
-  if (big) {
-    cy.on("mouseover", "node", (evt: EventObject) => focus(evt.target as cytoscape.NodeSingular));
-    cy.on("mouseout", "node", () => {
-      clearFocus();
-      cy.nodes(":selected").forEach((n: cytoscape.NodeSingular) => focus(n));
-    });
-  }
+  cy.on("mouseover", "node", (evt: EventObject) => {
+    if (cy.nodes(":selected").empty()) focus(evt.target as cytoscape.NodeSingular);
+  });
+  cy.on("mouseout", "node", () => {
+    if (cy.nodes(":selected").empty()) clearFocus();
+  });
 
   cy.on("tap", "node", (evt: EventObject) => {
     const node = evt.target as cytoscape.NodeSingular;
-    if (big) {
-      clearFocus();
-      focus(node);
-      node.addClass("lbl");
-    }
+    clearFocus();
+    focus(node);
+    node.addClass("lbl");
     onSelect(node.id());
   });
   cy.on("tap", (evt: EventObject) => {
     if (evt.target === cy) {
-      if (big) clearFocus();
+      clearFocus();
       onSelect(null);
     }
   });

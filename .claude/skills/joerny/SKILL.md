@@ -98,7 +98,7 @@ queries; skip them and emit raw when they don't fit):
 |---|---|---|
 | `derive.classify(items, id, rules)` | tagging entities into categories | the marker that matched |
 | `derive.groupByKey(items, id, key)` | equivalence/fingerprint grouping | the shared key |
-| `derive.bipartite(pairs, minShared)` | two node types → coupling + clusters | the shared right-nodes / cluster |
+| `derive.bipartite(pairs, minShared[, maxHubShare])` | two node types → coupling + clusters; raise `minShared` or lower `maxHubShare` to drop ubiquitous hubs (backboning) so dense projections separate | the shared right-nodes / cluster / hubs dropped |
 | `derive.slice(seeds, edges, maxDepth)` | reachability / impact / dependency scope | discovery depth |
 
 `.map(joerny.Mapping(from, to, note))` is still there for the rare bespoke edge,
@@ -112,9 +112,14 @@ run across three different codebases and `joern/EXPERIMENT_LOG.md` for where eac
 holds up vs. breaks.
 
 - **Behavior = graph structure, never method names.** Classify a method/job by
-  the **receiver type** of what it calls (e.g. `java.sql.*`, `javax.jms.*`,
+  the **receiver type** of what it calls (e.g. `javax.jms.*`,
   `org.apache.ibatis.*`, `org.springframework.web.*`), traced to depth ~3.
   Names lie; `send()` could be MQ, email, or HTTP.
+- **Match a subsystem's I/O surface, not its whole package.** "Reaches
+  `java.sql.*`" ≠ "does JDBC" — a library can *model* `java.sql.Date` with zero
+  DB I/O. Require the I/O carriers (`java.sql.Connection`/`Statement`/
+  `ResultSet`, `javax.sql.DataSource`) so use-of-subsystem isn't confused with
+  mention-of-a-value-type. Same idea for any capability flag.
 - **Entry points aren't always `main()`.** Batch systems seed from `main`; a DI
   framework (Spring) or servlet app has a trivial/absent `main` — seed from
   **call-graph roots** (own methods with no own-code caller = request handlers).
@@ -122,10 +127,14 @@ holds up vs. breaks.
   methods and concatenate their literals in source-line order (regex-on-all-
   literals picks up log strings). Under ORM/JPA or MyBatis XML there is **no
   literal SQL** — say so and switch producer (`@Entity`/`@Table`, mapper XML).
-- **Capability blocks = high fan-in.** Methods called by ≥5 distinct classes are
-  shared infrastructure (`[BLOCK]` — rebuild as a service). Low fan-in
-  job-specific helpers are `[EXPAND]` — inline their logic. Decide by fan-in
-  count, never by `path.contains("util")`.
+- **Capability blocks = high fan-in — but its meaning depends on shape.** In an
+  **application**, methods called by ≥5 distinct classes are shared
+  infrastructure (`[BLOCK]` — rebuild as a service); low fan-in job-specific
+  helpers are `[EXPAND]` — inline their logic. In a **library** (no `main()`,
+  no external-integration capabilities) high fan-in is just the *core public
+  API*, not rebuildable infrastructure — don't read it as a service boundary.
+  Detect shape first, then interpret; decide by fan-in count, never by
+  `path.contains("util")`.
 - **Connected flow tree** (the readable, implementable format): walk an entry
   point's AST calls in source order, and for each attach its **CDG guard**
   (`controlledBy`), enclosing loop, inline SQL, and `[BLOCK]`/`[EXPAND]` tag.

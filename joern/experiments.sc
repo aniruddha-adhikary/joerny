@@ -20,7 +20,13 @@ import io.shiftleft.codepropertygraph.generated.nodes.Method
 
   // behavior taxonomy keyed on the callee's OWNING TYPE (receiver), not name.
   val behaviors: List[(String, List[String])] = List(
-    "DB-JDBC"   -> List("java.sql.", "javax.sql."),
+    // DB-JDBC = actually *doing* JDBC I/O, so match the I/O carriers only.
+    // Matching the whole `java.sql.` package false-positives on value types like
+    // java.sql.Date/Time/Timestamp — a library (e.g. gson) can model those without
+    // ever touching a database. Require a Connection/Statement/ResultSet/DataSource.
+    "DB-JDBC"   -> List("java.sql.Connection", "java.sql.Statement", "java.sql.PreparedStatement",
+                        "java.sql.CallableStatement", "java.sql.ResultSet", "java.sql.DriverManager",
+                        "javax.sql.DataSource", "javax.sql.ConnectionPoolDataSource"),
     "ORM/JPA"   -> List("javax.persistence", "jakarta.persistence", "org.hibernate", "org.springframework.data", "org.springframework.orm"),
     "MYBATIS"   -> List("org.apache.ibatis", "org.mybatis"),
     "MQ"        -> List("javax.jms.", "org.apache.activemq"),
@@ -83,6 +89,10 @@ import io.shiftleft.codepropertygraph.generated.nodes.Method
       (m.typeDecl.name.headOption.getOrElse("") + "." + m.name) :: capCounts.keys.toList.map(c => if (caps.contains(c)) "yes" else "")
     }).emit()
   R(s"S2 capabilityCounts=" + capCounts.toList.sortBy(-_._2).map { case (c, n) => s"$c×$n" }.mkString(","))
+  // No main() and no external-integration behavior ⇒ this looks like a library,
+  // not an application. That flips the meaning of high fan-in below (§5).
+  val libraryLike = !usedMains && capCounts.isEmpty
+  R(s"S2 shape=${if (libraryLike) "library (no entry integration behavior)" else "application"}")
 
   // ---- STAGE 3: completeness / unknown count -------------------------------
   val calledExternal = cpg.call.methodFullName.l
@@ -120,11 +130,16 @@ import io.shiftleft.codepropertygraph.generated.nodes.Method
     joerny.graph("data-access").from("entry-points")
       .narrate(s"class → SQL table access from SQL-executing methods only (${incidence.size} edges, ${incidence.map(_._2).distinct.size} tables). read/write edges.")
       .nodes(clsNodes ++ tblNodes).edges(hits.map(h => joerny.Edge(h.cls, h.table, h.mode)).distinct).emit()
-    val bip = joerny.derive.bipartite(incidence, minShared = 1)
+    // Backboning: drop ubiquitous "hub" tables (touched by >40% of classes, e.g.
+    // TRADE_ORDERS / AUDIT_LOG) that otherwise couple everything into one blob, so
+    // real domain clusters separate instead of collapsing to a single component.
+    // maxHubShare is a tunable knob — lower to split more aggressively per codebase.
+    val bip = joerny.derive.bipartite(incidence, minShared = 1, maxHubShare = 0.4)
+    val dropped = bip.clusters.stats.getOrElse("hubsDropped", "").toString
     joerny.graph("domain-clusters").from("data-access")
-      .narrate(s"Classes coupled through shared tables → ${bip.clusters.stats.getOrElse("clusters", 0)} domain clusters (candidate service boundaries).")
+      .narrate(s"Classes coupled through shared tables (backboned: ${if (dropped.isEmpty) "no hub tables dropped" else s"hub tables dropped = $dropped"}) → ${bip.clusters.stats.getOrElse("clusters", 0)} domain clusters (candidate service boundaries).")
       .nodes(clsNodes).project(bip.clusters).emit()
-    R(s"S4 clusters=${bip.clusters.stats.getOrElse("clusters", 0)} couplingEdges=${bip.coupling.stats.getOrElse("edges", 0)}")
+    R(s"S4 clusters=${bip.clusters.stats.getOrElse("clusters", 0)} couplingEdges=${bip.coupling.stats.getOrElse("edges", 0)} hubsDropped=[$dropped]")
   } else {
     joerny.note("data-access").from("entry-points")
       .narrate("No literal SQL reachable via prepareStatement/executeQuery.")
@@ -140,12 +155,22 @@ import io.shiftleft.codepropertygraph.generated.nodes.Method
   val blockMethods = fan.map(_._1.fullName).toSet
   val blockPkgs = fan.map(_._3).distinct
   if (fan.nonEmpty) {
+    // What high fan-in *means* is mission-dependent: in an application it's shared
+    // infrastructure to extract as a service ([BLOCK]); in a library it's just the
+    // core public abstraction being reused — there is nothing to "rebuild".
+    val blockNarr =
+      if (libraryLike)
+        s"${fan.size} methods with fan-in ≥5 in ${blockPkgs.size} packages. NOTE: this is a library, so these are its CORE REUSED ABSTRACTIONS (public API), not rebuildable infrastructure — don't read them as service boundaries."
+      else
+        s"${fan.size} methods with fan-in ≥5 distinct caller classes = shared capability blocks ([BLOCK] boundaries), in ${blockPkgs.size} packages."
+    val blockNote = if (libraryLike) "distinct callers → CORE API (library)" else "distinct caller classes → BLOCK"
     joerny.graph("capability-blocks").from("entry-points")
-      .narrate(s"${fan.size} methods with fan-in ≥5 distinct caller classes = shared capability blocks ([BLOCK] boundaries), in ${blockPkgs.size} packages.")
-      .nodes(blockPkgs.map(p => joerny.Node(s"block:$p", p.split('.').takeRight(2).mkString("."), "block")))
-      .map(fan.map { case (m, n, p) => joerny.Mapping(m.fullName, s"block:$p", s"$n distinct caller classes → BLOCK") }: _*)
+      .narrate(blockNarr)
+      .nodes(blockPkgs.map(p => joerny.Node(s"block:$p", p.split('.').takeRight(2).mkString("."), if (libraryLike) "core-api" else "block")))
+      .map(fan.map { case (m, n, p) => joerny.Mapping(m.fullName, s"block:$p", s"$n $blockNote") }: _*)
       .emit()
   }
+  R(s"S5 shape=${if (libraryLike) "library-core-api" else "application-blocks"}")
   R(s"S5 blocks(fan-in>=5)=${fan.size} in ${blockPkgs.size} packages; top=" +
     fan.take(5).map { case (m, n, _) => s"${m.name}($n)" }.mkString(","))
 
