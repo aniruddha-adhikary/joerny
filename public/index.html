@@ -212,6 +212,16 @@
     .lg-origin-solid { border-top: 2px solid var(--muted); }
     .lg-origin-dashed { border-top: 2px dashed #c88ffb; }
     .lg-origin-dotted { border-top: 2px dotted #e0b978; }
+    /* flowchart shape swatches in the legend */
+    .lg-shape { width: 11px; height: 11px; display: inline-block; border: 1.5px solid; }
+    .lg-shape-decision { transform: rotate(45deg); }
+    .lg-shape-process, .lg-shape-terminal { border-radius: 3px; }
+    .lg-shape-io { transform: skewX(-18deg); }
+    /* flowchart orientation toggle (overlaid top-right of the flowchart pane) */
+    .fc-controls { position: absolute; top: 8px; right: 8px; z-index: 10; display: flex; gap: 4px; }
+    .fc-dir { font-size: 10px; padding: 3px 8px; border-radius: 12px; cursor: pointer;
+      border: 1px solid var(--border); background: var(--panel-2); color: var(--muted); font-family: var(--font-sans); }
+    .fc-dir.active { color: var(--text); border-color: var(--accent); background: var(--accent-dim); }
     .chip.fact { border-color: var(--accent-dim); }
     .chip.fact.missing { opacity: .5; cursor: default; text-decoration: line-through; }
     a { color: var(--accent); }

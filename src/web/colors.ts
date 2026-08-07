@@ -28,6 +28,26 @@ export const SEMANTIC_TYPE_COLORS: Record<string, string> = {
   gap: "#e0955a",
 };
 
+// Flowchart node-shape colours (algorithm view). A decision (guard) is amber, a
+// process (data op) blue, an io side-effect green, a terminal grey — so the
+// control-flow reads at a glance without reading every label.
+export const FLOW_SHAPE_COLORS: Record<string, string> = {
+  decision: "#e0b978",
+  process: "#6ea8fe",
+  io: "#7ed6a5",
+  terminal: "#8b93a7",
+};
+
+// Flowchart branch-edge colours: a `yes` path is green, a `no` red, a loop
+// purple, so which way control flows is legible at a glance.
+export const FLOW_BRANCH_COLORS: Record<string, string> = {
+  yes: "#7ed6a5",
+  no: "#f0616d",
+  loop: "#c88ffb",
+  exit: "#8b93a7",
+  "on error": "#e0955a",
+};
+
 // Layer-kind colours (mirror the CSS custom properties).
 export const KIND_COLORS: Record<string, string> = {
   graph: "#6ea8fe",

@@ -2,6 +2,7 @@ import { marked } from "marked";
 import type { ServerMessage } from "../shared/layer.js";
 import { AppState } from "./state.js";
 import { renderGraph, type GraphViewHandle } from "./graphView.js";
+import { renderFlowchart } from "./flowchartView.js";
 import { renderProjection, type ProjectionHandle } from "./projectionView.js";
 import { renderLineage } from "./lineage.js";
 import { renderInspector } from "./inspector.js";
@@ -167,7 +168,14 @@ function renderCenter(): void {
   const hasProj = state.hasProjection(layer);
   if (!hasProj && state.viewMode === "projection") state.viewMode = "primary";
   el.toolbar.style.display = "flex";
-  el.tabPrimary.textContent = layer.kind === "graph" ? "Graph" : layer.kind === "table" ? "Table" : "Note";
+  const isFlowchart = layer.kind === "graph" && layer.render === "flowchart";
+  el.tabPrimary.textContent = isFlowchart
+    ? "Flowchart"
+    : layer.kind === "graph"
+      ? "Graph"
+      : layer.kind === "table"
+        ? "Table"
+        : "Note";
   el.tabPrimary.classList.toggle("active", state.viewMode === "primary");
   el.tabProjection.classList.toggle("active", state.viewMode === "projection");
   el.legend.innerHTML = legendHtml(layer, state.viewMode);
@@ -190,7 +198,7 @@ function renderCenter(): void {
 
   if (layer.kind === "graph") {
     showCenter("cy");
-    graphHandle = renderGraph(el.cy, layer, (nodeId) => {
+    const onNode = (nodeId: string | null): void => {
       state.focusNode(nodeId);
       renderRight();
       renderNav();
@@ -198,7 +206,8 @@ function renderCenter(): void {
         graphHandle.cy.$(".highlight").removeClass("highlight");
         if (nodeId) graphHandle.cy.$id(nodeId).addClass("highlight");
       }
-    });
+    };
+    graphHandle = isFlowchart ? renderFlowchart(el.cy, layer, onNode) : renderGraph(el.cy, layer, onNode);
   } else if (layer.kind === "table") {
     showCenter("table");
     const head = `<tr>${layer.columns.map((c) => `<th>${escapeHtml(c)}</th>`).join("")}</tr>`;

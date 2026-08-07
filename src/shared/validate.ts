@@ -115,11 +115,15 @@ export function validateLayer(raw: unknown): ValidationResult {
 
   let layer: Layer;
   if (kind === "graph") {
+    const render = raw.render === "flowchart" ? "flowchart" : undefined;
+    const direction = raw.direction === "LR" || raw.direction === "TB" ? raw.direction : undefined;
     layer = {
       ...base,
       kind: "graph",
       nodes: normalizeNodes(raw.nodes as unknown[]),
       edges: normalizeEdges((raw.edges as unknown[]) ?? []),
+      ...(render ? { render } : {}),
+      ...(direction ? { direction } : {}),
     };
   } else if (kind === "table") {
     layer = { ...base, kind: "table", columns: raw.columns as string[], rows: raw.rows as unknown[][] };

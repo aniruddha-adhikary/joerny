@@ -69,10 +69,31 @@ export interface LayerBase {
   mappings?: NodeMapping[];
 }
 
+/** Presentation hint for a graph layer.
+ *  - `graph` (default): force-/shape-driven node-link view.
+ *  - `flowchart`: hierarchical control-flow view — node shapes come from each
+ *    node's `props.shape`, edges are branch-labelled, and it lays out top-down
+ *    (or left-right). Use for algorithm/flowchart layers. */
+export type GraphRender = "graph" | "flowchart";
+
+/** Reading direction of a flowchart: top-to-bottom or left-to-right. */
+export type FlowDirection = "TB" | "LR";
+
+/** Shape of a flowchart node — the classic flowchart vocabulary.
+ *  - `decision`: a control-flow guard (if/loop/switch condition) → diamond.
+ *  - `process`: a data operation (assignment, own-code call) → rectangle.
+ *  - `io`: an external side effect (DB / queue / file / network) → parallelogram.
+ *  - `terminal`: start / end / return → stadium. */
+export type FlowShape = "decision" | "process" | "io" | "terminal";
+
 export interface GraphLayer extends LayerBase {
   kind: "graph";
   nodes: GraphNode[];
   edges: GraphEdge[];
+  /** Presentation hint; absent = `graph`. */
+  render?: GraphRender;
+  /** Default reading direction when `render === "flowchart"`; absent = `TB`. */
+  direction?: FlowDirection;
 }
 
 export interface TableLayer extends LayerBase {

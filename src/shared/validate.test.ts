@@ -90,6 +90,38 @@ test("preserves a step tag and drops an empty one", () => {
   assert.equal(untagged.layer?.step, undefined);
 });
 
+test("keeps flowchart render + direction and drops invalid ones", () => {
+  const fc = validateLayer({
+    id: "algo",
+    name: "algorithm: evaluate",
+    kind: "graph",
+    render: "flowchart",
+    direction: "LR",
+    nodes: [{ id: "a", label: "guard", props: { shape: "decision" } }],
+    edges: [{ src: "a", dst: "a", type: "yes" }],
+  });
+  assert.ok(fc.ok, fc.errors.join("; "));
+  if (fc.layer?.kind === "graph") {
+    assert.equal(fc.layer.render, "flowchart");
+    assert.equal(fc.layer.direction, "LR");
+    assert.equal(fc.layer.nodes[0].props?.shape, "decision");
+  }
+
+  const plain = validateLayer({
+    id: "g",
+    name: "g",
+    kind: "graph",
+    render: "sankey", // unknown → dropped, defaults to node-link graph
+    direction: "diagonal", // invalid → dropped
+    nodes: [{ id: "a" }],
+  });
+  assert.ok(plain.ok);
+  if (plain.layer?.kind === "graph") {
+    assert.equal(plain.layer.render, undefined);
+    assert.equal(plain.layer.direction, undefined);
+  }
+});
+
 test("rejects non-object input", () => {
   assert.equal(validateLayer(null).ok, false);
   assert.equal(validateLayer([]).ok, false);
