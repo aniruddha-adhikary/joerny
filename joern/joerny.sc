@@ -224,10 +224,17 @@ object joerny {
   final class GraphBuilder(name: String) extends Builder[GraphBuilder]("graph", name) {
     private var _nodes: List[Node] = Nil
     private var _edges: List[Edge] = Nil
+    private var _render: String = null
+    private var _direction: String = null
     def nodes(ns: Iterable[Node]): GraphBuilder = { _nodes = _nodes ++ ns.toList; this }
     def node(n: Node): GraphBuilder = { _nodes = _nodes :+ n; this }
     def edges(es: Iterable[Edge]): GraphBuilder = { _edges = _edges ++ es.toList; this }
     def edge(e: Edge): GraphBuilder = { _edges = _edges :+ e; this }
+    /** Render this graph as a control-flow *flowchart* (hierarchical layout,
+     *  node shapes from each node's `props("shape")`, branch-labelled edges).
+     *  `direction` is the default reading order: "TB" (top-down, the flowchart
+     *  norm) or "LR" (left-right); the viewer still lets you flip it. */
+    def flowchart(direction: String = "TB"): GraphBuilder = { _render = "flowchart"; _direction = direction; this }
     /** Merge a computed projection (its nodes, edges and provenance mappings) into this layer. */
     def project(p: Projection): GraphBuilder = {
       _nodes = _nodes ++ p.nodes
@@ -236,9 +243,11 @@ object joerny {
       this
     }
     protected def payloadFields(): List[String] = List(
-      field("nodes", "[" + _nodes.map(nodeJson).mkString(",") + "]"),
-      field("edges", "[" + _edges.map(edgeJson).mkString(",") + "]")
-    )
+      Some(field("nodes", "[" + _nodes.map(nodeJson).mkString(",") + "]")),
+      Some(field("edges", "[" + _edges.map(edgeJson).mkString(",") + "]")),
+      optStr("render", _render),
+      optStr("direction", _direction)
+    ).flatten
   }
 
   final class TableBuilder(name: String) extends Builder[TableBuilder]("table", name) {

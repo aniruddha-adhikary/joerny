@@ -154,6 +154,24 @@ citation gate → coverage), keeping every statement traceable to `file:line`
 source — reach for it when the mission is requirements reconstruction, not as a
 mandatory pipeline.
 
+`joern/algorithm.sc` is a third reference — the **algorithm view**: when the
+mission is "what actually happens to this data, step by step" (not who-calls-who),
+it walks a method's AST control structure into a **flowchart** of guards
+(if/while/for/switch conditions → decisions), data operations (assignments,
+own-code calls → processes), external side effects (DB/queue/file/net → io) and
+returns (terminals), wired by branch-labelled edges (`yes`/`no`/`loop`/`exit`/
+`on error`). It is 100% mechanical (reconstructed from the CPG AST, not an LLM
+paraphrase), rings every node that touches a chosen `focusType`, and drills one
+level down — each own-code callee becomes its own derived flowchart layer,
+mapped back to the exact call site (`.from(...)` + a `Mapping`), so the
+transformation is traceable across layers. Run it as
+`run(cpgPath=..., entry="methodName", focusType="Order")` (omit `entry` to
+auto-pick the richest-control-flow own method). Emit a flowchart from your own
+walk with `joerny.graph(name).flowchart("TB")` (or `"LR"`) and per-node
+`props("shape")` of `decision|process|io|terminal`; the viewer renders shapes,
+labels branches, and offers a top-down/left-right toggle. Optional — reach for
+it when a specific algorithm matters, skip it when structure is the question.
+
 - **Behavior = graph structure, never method names.** Classify a method/job by
   the **receiver type** of what it calls (e.g. `javax.jms.*`,
   `org.apache.ibatis.*`, `org.springframework.web.*`), traced to depth ~3.

@@ -10,3 +10,6 @@ public/bundle.js.map
 # scala-cli build artifacts
 .scala-build/
 .bsp/
+
+# Joern scratch workspace (created when running scripts from the repo root)
+workspace/

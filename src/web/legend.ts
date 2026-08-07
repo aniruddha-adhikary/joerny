@@ -1,5 +1,5 @@
 import type { Layer } from "../shared/layer.js";
-import { buildTypePalette, edgeColor, KIND_COLORS } from "./colors.js";
+import { buildTypePalette, edgeColor, FLOW_BRANCH_COLORS, FLOW_SHAPE_COLORS, KIND_COLORS } from "./colors.js";
 
 function esc(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
@@ -7,6 +7,9 @@ function esc(s: string): string {
 
 const dot = (color: string, label: string): string =>
   `<span class="lg-item"><span class="lg-dot" style="background:${color}"></span>${esc(label)}</span>`;
+// A flowchart shape swatch (diamond/rectangle/rhomboid outline) for its legend.
+const shapeSwatch = (shape: string, color: string, label: string): string =>
+  `<span class="lg-item"><span class="lg-shape lg-shape-${shape}" style="border-color:${color};background:${color}33"></span>${esc(label)}</span>`;
 const line = (color: string, label: string): string =>
   `<span class="lg-item"><span class="lg-line" style="background:${color}"></span>${esc(label)}</span>`;
 // A styled connector sample (solid/dashed/dotted) for the provenance legend.
@@ -65,7 +68,27 @@ export function legendHtml(layer: Layer, mode: "primary" | "projection"): string
     return parts.join("");
   }
 
-  if (layer.kind === "graph") {
+  if (layer.kind === "graph" && layer.render === "flowchart") {
+    // Flowchart: the legend explains the shape vocabulary + branch colours that
+    // are actually present, plus which nodes are on the tracked data path.
+    const shapes = new Set(layer.nodes.map((n) => (n.props?.shape as string) ?? "process"));
+    const shapeMeaning: Record<string, string> = {
+      decision: "decision (guard)",
+      process: "process (data op)",
+      io: "I/O side-effect",
+      terminal: "start / end / return",
+    };
+    for (const s of ["decision", "process", "io", "terminal"]) {
+      if (shapes.has(s)) parts.push(shapeSwatch(s, FLOW_SHAPE_COLORS[s] ?? "#6ea8fe", shapeMeaning[s]));
+    }
+    const branches = Array.from(new Set(layer.edges.map((e) => e.type).filter((t): t is string => !!t))).sort();
+    for (const b of branches) parts.push(line(FLOW_BRANCH_COLORS[b] ?? "#5a6270", b));
+    if (layer.nodes.some((n) => n.props?.focus === true)) {
+      parts.push(`<span class="lg-item"><span class="lg-dot" style="background:#fff"></span>on the data path</span>`);
+    }
+    provenance();
+    parts.push(`<span class="lg-hint">hover a step to trace its path</span>`);
+  } else if (layer.kind === "graph") {
     const palette = buildTypePalette(layer.nodes.map((n) => n.type));
     const types = Array.from(new Set(layer.nodes.map((n) => n.type).filter((t): t is string => !!t))).sort();
     for (const t of types) parts.push(dot(palette.get(t) ?? "#b0bac9", TYPE_MEANING[t] ?? t));
