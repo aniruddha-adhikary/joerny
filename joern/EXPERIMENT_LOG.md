@@ -255,3 +255,60 @@ joern --script joern/validation.sc --param cpgPath=/path/to/oldent-cpg.bin   # a
 joern --script joern/commonality.sc --param cpgPath=/path/to/oldent-cpg.bin
 joern --script joern/lifecycle.sc  --param cpgPath=/path/to/oldent-cpg.bin --param field=status
 ```
+
+# Experiment 4 — the "draw boundaries" pair (flow overlay + CRUD/coupling)
+
+The two producers that answer "isolate components and draw the merge lines"
+directly. Both validated against oldent.
+
+## `overlay.sc` — align 2+ algorithms, colour shared vs divergent
+
+Linearises each method to its ordered significant steps (pre-order AST walk;
+guards + non-noise calls) and overlays them: a step signature (callee fullName /
+normalised guard) present in ≥2 flows is `shared`, else flow-`unique`; each
+consecutive step pair is an edge coloured by how many flows take it — a shared
+sub-path is a run of shared nodes+edges (the "merge line").
+
+- **Auto-pick is weak by design.** The 3 richest-control-flow own methods
+  (`RuleEngine.evaluate`, `DatReconciliationParser.parse`,
+  `OrderMessageListener.processOrder`) are *unrelated* → only 1 shared step. That
+  is the honest answer: overlay is only meaningful across *variants of each
+  other*. Pass them explicitly.
+- oldent (4 sibling risk rules: `KYCStatusRule`, `ClientKillSwitchRule`,
+  `ShortSaleRule`, `MarketHaltRule` `.evaluate`): **15 distinct steps, 6 shared
+  by ≥2 flows.** The shared backbone is exactly the rule preamble —
+  `if context==null → RuleContext.getOrder() → RuleContext.getClient() →
+  if client==null` — with each rule's own predicate (`if kycStatus`, `if
+  killSwitchValue`, `if marketHalted`) hanging off as the divergent tail. That
+  common preamble is the extract-a-base-class candidate.
+- Explicitly a **linearised spine**, not full branch semantics (that's
+  `algorithm.sc`) — narrated as such so it isn't over-read.
+
+## `crud.sc` — entity ownership + coupling cut-points
+
+Reuses the requirements producer's raw-JDBC SQL extraction (FROM/JOIN = read,
+INSERT/UPDATE/DELETE = write) attributed to each method's owning class.
+
+- oldent: **26 classes, 12 tables, 60 access facts.**
+- **Ownership (single writer) = 9 tables**, each a clean boundary:
+  `AUDIT_LOG→AuditDAO`, `BILLING_LEDGER→BillingDAO`, `SETTLEMENT_RECORDS→
+  SettlementDAO`, `RISK_ASSESSMENTS→RiskDAO`, `NOTIFICATIONS→NotificationListener`,
+  … — exactly the DAO-owns-its-table structure, recovered mechanically.
+- **Coupling** (classes sharing a non-hub table, `maxHubShare=0.5` backbones out
+  the ubiquitous `TRADE_ORDERS`/`CLIENTS`): 115 edges over 25 classes.
+- **Cut-points (Tarjan articulation vertices) = 3**: `DatabaseBootstrap`,
+  `DemoRunner`, `RiskScheduler` — the bootstrap/orchestrators that bridge
+  otherwise-separate DAO groups. Remove one and a cluster splits — a natural
+  seam. A structural fact, not an architectural verdict.
+- Under JPA/ORM there is no literal SQL: the producer detects the empty result
+  and stops with a "switch to @Entity/@Table" message rather than emitting a
+  misleadingly empty matrix.
+
+## Reproduce Experiment 4
+
+```bash
+export JOERNY_DIR="$PWD/.joerny/current/layers"
+joern --script joern/overlay.sc --param cpgPath=/path/to/oldent-cpg.bin \
+  --param entries="KYCStatusRule.evaluate,ClientKillSwitchRule.evaluate,ShortSaleRule.evaluate,MarketHaltRule.evaluate"
+joern --script joern/crud.sc    --param cpgPath=/path/to/oldent-cpg.bin --param maxHubShare=0.5
+```
