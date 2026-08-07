@@ -172,6 +172,40 @@ walk with `joerny.graph(name).flowchart("TB")` (or `"LR"`) and per-node
 labels branches, and offers a top-down/left-right toggle. Optional — reach for
 it when a specific algorithm matters, skip it when structure is the question.
 
+Four more references cover other graph *shapes* a mission may want. Each is
+mechanical (CPG facts + `file:line` evidence, no LLM), optional, and malleable —
+tune the params or copy the pattern; none is a mandatory step:
+
+- `joern/dataflow.sc` — **value-centric data flow.** Traces where a datum goes
+  (source → transforms → sink) using Joern's dataflow engine
+  (`reachableByFlows`, `io.joern.dataflowengineoss`), not who-calls-who. Every
+  edge is a proven data-dependence hop. Emits a flowchart with source/sink
+  I/O shapes. `run(cpgPath=..., source="get.*|is.*", sink="executeUpdate|send|...")`.
+  Reach for it to answer "what happens to `order.price` from read to DB write".
+- `joern/validation.sc` — **field ⟷ check map.** Finds control-structure guards
+  (`if/while/for`) whose condition reads a field (getter or field access) and
+  builds a bipartite field→predicate graph + a per-field rules table (each with
+  the exact predicate + `file:line`). `run(cpgPath=..., typeName="Order")` to
+  scope to one type (unscoped can be 100+ fields — the table reads best then).
+  Reach for it to reconstruct validation across a form/domain object.
+- `joern/commonality.sc` — **shared business logic across flows.** For N entry
+  points, computes each flow's bounded own-code reachability set, emits a
+  flow⟷method incidence graph, a "shared components" table (methods reached by
+  ≥k flows = merge/extraction candidates), and flow-coupling clusters via
+  `joerny.derive.bipartite`. `run(cpgPath=..., entries="a,b,c", depth=4)`
+  (omit `entries` to auto-seed from `main`/call-graph roots). Reach for it to
+  isolate components and draw boundaries. Shared ≠ "must extract" — it's a
+  mechanical incidence fact; the boundary call stays human.
+- `joern/lifecycle.sc` — **state-machine recovery.** Finds writes to a status
+  field (setters + field-assignments, excluding constant declarations/reads),
+  resolves the target state only from an ALL-CAPS constant or whole-string
+  literal (never an opaque expression), and recovers a source state only from an
+  AST-enclosing guard that compares the *same* field to a constant. Emits a
+  transition flowchart + table. `run(cpgPath=..., field="status")`. Honest by
+  design: a write with no guard-proven prior state is a `(start) → STATE` entry,
+  not an invented edge — if the code only sets terminal states unconditionally,
+  you'll correctly see zero state→state transitions.
+
 - **Behavior = graph structure, never method names.** Classify a method/job by
   the **receiver type** of what it calls (e.g. `javax.jms.*`,
   `org.apache.ibatis.*`, `org.springframework.web.*`), traced to depth ~3.
