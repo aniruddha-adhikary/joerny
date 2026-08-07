@@ -171,3 +171,87 @@ joern --script joern/requirements.sc \
 export JOERNY_DIR="$PWD/.joerny/current/layers"
 joern --script joern/experiments.sc --param cpgPath=/path/to/cpg.bin
 ```
+
+# Experiment 3 — four more graph *shapes* (dataflow / validation / commonality / lifecycle)
+
+Goal: beyond structure (who-calls-who) and one-method behaviour (`algorithm.sc`),
+what other **mechanically-groundable** graphs answer "what does this system do"?
+Prototyped four producers and validated each against the oldent CPG. Each stays
+optional and malleable; each keeps `file:line` evidence and marks nothing as LLM.
+
+## `dataflow.sc` — value-centric data flow (where a datum goes)
+
+Uses Joern's dataflow engine (`io.joern.dataflowengineoss`,
+`sink.reachableByFlows(source)`), **not** the call graph. Import path matters:
+it's `io.joern.dataflowengineoss.*`, not `io.shiftleft.*` (the first probe failed
+on the wrong package). Each node is a step a value passes through; each edge is a
+proven data-dependence hop; sources/sinks render as I/O parallelograms.
+
+- oldent (`sink=executeUpdate`): **46 sinks, 1258 candidate sources → 10 flows,
+  132 nodes / 149 edges.** Real multi-hop paths, e.g. `event.getEventType() → … →
+  executeUpdate`. The honest unit is the def-use hop, not a business narrative.
+
+## `validation.sc` — field ⟷ check bipartite (validation across fields)
+
+Scans `IF/WHILE/DO/FOR` conditions for reads of a field (getter call `get*/is*`
+or `<operator>.fieldAccess`) and maps `field → predicate` with the exact guard
+text + location. **API note:** `typeFullName` is *not* a member of bare
+`Expression`/`Iterator[Expression]`; owner/member are parsed from the receiver
+`code` instead, which is robust across node types.
+
+- oldent: **657 guards → 178 field-reading checks over 120 distinct fields.**
+  Top domain fields surface directly: `order.side`, `order.contractType`,
+  `context.clientId`, `notif.channel`. Unscoped (120 fields) the *table* reads
+  best; scope the graph with `typeName=`. Renderer note below.
+
+## `commonality.sc` — shared logic across flows (boundaries / merge lines)
+
+For N entries, bounded own-code reachability per flow → `flow ⟷ method`
+incidence, a "shared by ≥k flows" table, and coupling clusters via
+`derive.bipartite`. (Probe learning: `own.name("main")` mis-typed; use
+`own.filter(_.name == "main")`.)
+
+- oldent (4 `main` entries, depth 4): **29 incidence pairs; 3 methods reached by
+  ≥2 flows** — `MessageQueueHelper.init`, `ConnectionHelper.init`,
+  `DatabaseBootstrap.bootstrap` — i.e. the shared bootstrap infra, exactly the
+  merge candidates. No method is shared by *all* flows, so "shared by ≥k" is the
+  useful signal, not a naïve full intersection.
+
+## `lifecycle.sc` — state-machine recovery (honest about what's unprovable)
+
+Finds status-field writes and recovers transitions **only** where the code proves
+them. Precision rules that matter:
+- Target state must be an ALL-CAPS constant or a *whole-string* literal — a quoted
+  substring inside a call (`extractTag(xml,"status")` → tag name) is not a state;
+  an opaque expression is skipped, not guessed.
+- Write must set a *field* (setter, or `.field` assignment) — excludes constant
+  *declarations* (`STATUS_NEW = "NEW"` in `<clinit>`) and reads into a local
+  (`statusStr = rs.getString("STATUS")`).
+- Source state only from a guard that **AST-encloses** the write and compares the
+  *same* field to a constant (a sibling guard doesn't count).
+
+- oldent (`field=status`): 112 raw write sites → **44 genuine writes → 18
+  transitions across 17 states** (`STATUS_FILLED`, `STATUS_REJECTED`,
+  `STATUS_SETTLED`, `RISK_STATUS_FLAGGED`, …). **0 guard-proven state→state**
+  edges — the honest finding: oldent assigns terminal states inside null-checks
+  (`if (recordId != null && statusStr != null)`), not prior-state comparisons, so
+  there is no legal-transition graph to recover. Refusing to synthesise edges
+  from sibling guards is the anti-hallucination behaviour, not a gap.
+
+## Renderer: `shattered` graphs
+
+The 120-field validation graph is ~120 disconnected `field↔check` pairs. A force
+layout (`cose`) flings the components apart until fit-zoom shrinks them to
+nothing (blank canvas). Added a `shattered` shape signal to `viewHeuristics`
+(union-find component count ≥ n/3 with n≥24) → pack with a **grid** layout so
+every node stays on-screen and scannable; short edges still draw between cells.
+
+## Reproduce Experiment 3
+
+```bash
+export JOERNY_DIR="$PWD/.joerny/current/layers"
+joern --script joern/dataflow.sc   --param cpgPath=/path/to/oldent-cpg.bin --param sink=executeUpdate
+joern --script joern/validation.sc --param cpgPath=/path/to/oldent-cpg.bin   # add --param typeName=Order to scope
+joern --script joern/commonality.sc --param cpgPath=/path/to/oldent-cpg.bin
+joern --script joern/lifecycle.sc  --param cpgPath=/path/to/oldent-cpg.bin --param field=status
+```

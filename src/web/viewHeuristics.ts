@@ -18,6 +18,9 @@ export interface Shape {
   hubby: boolean;
   /** many nodes or high density → aggressive declutter. */
   crowded: boolean;
+  /** many small disconnected components (e.g. field↔check pairs) → force
+   * layouts scatter them off-screen; pack them into a grid instead. */
+  shattered: boolean;
 }
 
 export interface Presentation {
@@ -40,6 +43,27 @@ export function measure(nodeCount: number, edges: Array<{ source: string; target
   }
   const maxDeg = deg.size ? Math.max(...deg.values()) : 0;
   const avgDeg = (2 * m) / n;
+
+  // Count connected components via union-find over edge endpoints; nodes that
+  // appear in no edge are singleton components.
+  const parent = new Map<string, string>();
+  const find = (x: string): string => {
+    let r = x;
+    while (parent.get(r) !== r) r = parent.get(r) as string;
+    let c = x;
+    while (parent.get(c) !== r) { const nx = parent.get(c) as string; parent.set(c, r); c = nx; }
+    return r;
+  };
+  const touch = (x: string): void => { if (!parent.has(x)) parent.set(x, x); };
+  for (const e of edges) {
+    touch(e.source); touch(e.target);
+    parent.set(find(e.source), find(e.target));
+  }
+  const roots = new Set<string>();
+  for (const k of parent.keys()) roots.add(find(k));
+  const isolated = Math.max(0, n - deg.size);
+  const componentCount = roots.size + isolated;
+
   return {
     n,
     m,
@@ -48,6 +72,9 @@ export function measure(nodeCount: number, edges: Array<{ source: string; target
     treeLike: n >= 3 && m <= n * 1.3 && maxDeg <= Math.max(6, n * 0.5),
     hubby: maxDeg >= Math.max(8, n * 0.4),
     crowded: n > 24 || avgDeg > 3 || maxDeg > 14,
+    // Fragmented into many small pieces: avg component < ~3 nodes and enough of
+    // them that a force layout would fling them apart and fit-zoom to nothing.
+    shattered: m > 0 && n >= 24 && componentCount >= n / 3,
   };
 }
 
@@ -56,7 +83,7 @@ export function measure(nodeCount: number, edges: Array<{ source: string; target
  * bipartite projection force a left→right hierarchy even when it isn't tree-like.
  */
 export function present(shape: Shape, opts: { preferDagreLR?: boolean } = {}): Presentation {
-  const { n, m, avgDeg, maxDeg, treeLike, hubby, crowded } = shape;
+  const { n, m, avgDeg, maxDeg, treeLike, hubby, crowded, shattered } = shape;
 
   const nodeLabels: "always" | "hover" = crowded || n > 22 ? "hover" : "always";
   // Edge labels are the first thing to overwhelm a view; keep them only when
@@ -77,11 +104,14 @@ export function present(shape: Shape, opts: { preferDagreLR?: boolean } = {}): P
   const useDagre = (opts.preferDagreLR && !hubby && !crowded) || (treeLike && !hubby);
 
   let layout: cytoscape.LayoutOptions;
-  if (m === 0) {
-    // No edges = a pure classification set (e.g. coverage covered/gap). A single
-    // column is unreadable; a near-square grid packs it and stays scannable.
+  if (m === 0 || shattered) {
+    // No edges = a pure classification set (e.g. coverage covered/gap); or many
+    // tiny disconnected pieces (e.g. 120 field↔check pairs) that a force layout
+    // would fling apart until fit-zoom shrinks them to nothing. Either way a
+    // near-square grid packs everything on-screen and stays scannable — the
+    // few short edges still draw between adjacent cells.
     const cols = Math.max(1, Math.ceil(Math.sqrt(n)));
-    layout = { name: "grid", cols, condense: true, spacingFactor } as cytoscape.LayoutOptions;
+    layout = { name: "grid", cols, condense: true, spacingFactor, avoidOverlap: true } as cytoscape.LayoutOptions;
   } else if (useDagre) {
     // Hierarchical: node/rank separation scales with node count.
     const nodeSep = Math.min(18 + n, 60);
