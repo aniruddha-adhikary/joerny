@@ -205,6 +205,25 @@ tune the params or copy the pattern; none is a mandatory step:
   design: a write with no guard-proven prior state is a `(start) → STATE` entry,
   not an invented edge — if the code only sets terminal states unconditionally,
   you'll correctly see zero state→state transitions.
+- `joern/overlay.sc` — **align 2+ algorithms; show where they merge/diverge.**
+  Linearises each method to its ordered significant steps (guards + non-noise
+  calls) and overlays them: a step in ≥2 flows is `shared` (the mergeable common
+  backbone → extract), one in a single flow is that flow's own logic; edges are
+  coloured by how many flows take the transition, so a shared sub-path is a run
+  of shared nodes+edges. Steps align by signature (callee fullName / normalised
+  guard). `run(cpgPath=..., entries="RuleA.evaluate,RuleB.evaluate")` — pass
+  *related* flows (variants of each other); auto-pick grabs the 3 richest-control
+  methods, which may be unrelated. It's a linearised spine, not full branch
+  semantics (that's `algorithm.sc`) — narrated as such, don't overclaim.
+- `joern/crud.sc` — **who owns what data + where to cut boundaries.** From
+  raw-JDBC SQL literals builds a class⟷table CRUD matrix (edge per read/write
+  with `file:line`), flags **ownership** (a table with exactly one writing class),
+  and a class-coupling graph (classes sharing a non-hub table; ubiquitous tables
+  backboned out by `maxHubShare`). Runs Tarjan to mark **cut-point** classes
+  (articulation vertices — removing one splits a cluster → a natural boundary
+  seam). `run(cpgPath=..., maxHubShare=0.5)`. Under JPA/ORM there's no literal
+  SQL — it says so and stops (switch to `@Entity`/`@Table`). Cut-points/ownership
+  are mechanical graph facts, not an architectural verdict.
 
 - **Behavior = graph structure, never method names.** Classify a method/job by
   the **receiver type** of what it calls (e.g. `javax.jms.*`,
